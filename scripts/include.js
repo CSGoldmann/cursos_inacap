@@ -15,6 +15,9 @@
     }
   }
 
-  // adjust path if you put partials elsewhere
-  await loadPartial('partials/sidebar.html', 'sidebar');
+  // load both sidebar and header
+  await Promise.all([
+    loadPartial('partials/sidebar.html', 'sidebar'),
+    loadPartial('partials/header.html', 'header')
+  ]);
 })();

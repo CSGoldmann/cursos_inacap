@@ -1,0 +1,47 @@
+<header class="bg-white border-bottom py-3 px-4">
+    <div class="d-flex align-items-center">
+        <div class="dropdown" id="notif-wrapper">
+            <button id="notif-bell" 
+                    class="btn btn-light rounded-circle p-2 position-relative" 
+                    type="button" 
+                    data-bs-toggle="dropdown" 
+                    aria-expanded="false">
+                <img src="Pictures/bell.png" alt="Notificaciones" style="width: 24px; height: 24px;" />
+                <span id="notif-count" class="position-absolute top-0 end-0 translate-middle badge rounded-pill bg-danger">
+                    3
+                </span>
+            </button>
+
+            <div id="notif-menu" class="dropdown-menu dropdown-menu-end shadow-sm" style="width: 320px;">
+                <div class="py-2">
+                    <div class="px-3 py-2 border-bottom fw-medium">Notificaciones</div>
+                    <div id="notif-list" style="max-height: 240px; overflow-y: auto;">
+                        <a href="#" data-id="1" class="notification-item dropdown-item px-3 py-2">
+                            <div class="d-flex flex-column">
+                                <span class="fw-medium">Nueva tarea subida</span>
+                                <small class="text-secondary">Matemáticas II</small>
+                            </div>
+                        </a>
+                        <a href="#" data-id="2" class="notification-item dropdown-item px-3 py-2">
+                            <div class="d-flex flex-column">
+                                <span class="fw-medium">Mensaje del docente</span>
+                                <small class="text-secondary">Programación Web</small>
+                            </div>
+                        </a>
+                        <a href="#" data-id="3" class="notification-item dropdown-item px-3 py-2">
+                            <div class="d-flex flex-column">
+                                <span class="fw-medium">Asistencia baja</span>
+                                <small class="text-secondary">Física I</small>
+                            </div>
+                        </a>
+                    </div>
+                    <div class="border-top">
+                        <a href="notifications.html" id="view-all-notifs" class="dropdown-item text-primary text-center py-2">
+                            Ver todas
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</header>

@@ -143,36 +143,34 @@
     }
 
     // -- Notifications bell (dropdown & clicks) --
-    const notifBell = document.getElementById('notif-bell');
-    const notifMenu = document.getElementById('notif-menu');
-    const notifWrapper = document.getElementById('notif-wrapper');
-    const notifCountEl = document.getElementById('notif-count');
     const notifList = document.getElementById('notif-list');
-
-    if (notifBell && notifMenu && notifWrapper && notifList) {
-        function openNotifMenu(){ notifMenu.classList.remove('hidden'); notifBell.setAttribute('aria-expanded','true'); }
-        function closeNotifMenu(){ notifMenu.classList.add('hidden'); notifBell.setAttribute('aria-expanded','false'); }
-        function toggleNotifMenu(){ notifMenu.classList.contains('hidden') ? openNotifMenu() : closeNotifMenu(); }
-
-        notifBell.addEventListener('click', (e) => { e.stopPropagation(); toggleNotifMenu(); });
-        document.addEventListener('click', (e) => { if (!notifWrapper.contains(e.target)) closeNotifMenu(); });
-
+    const notifCountEl = document.getElementById('notif-count');
+    
+    if (notifList && notifCountEl) {
         notifList.addEventListener('click', (e) => {
             const item = e.target.closest('.notification-item');
             if (!item) return;
             e.preventDefault();
+            
             const id = item.getAttribute('data-id');
             console.log('Notification clicked:', id);
-            item.classList.add('bg-slate-50','text-slate-500');
-            if (notifCountEl) {
-                const current = parseInt(notifCountEl.textContent || '0', 10);
-                const next = Math.max(0, current - 1);
-                notifCountEl.textContent = String(next);
-                if (next === 0) notifCountEl.classList.add('hidden');
+            
+            // Mark as read
+            item.classList.add('bg-light', 'text-secondary');
+            
+            // Update counter
+            const current = parseInt(notifCountEl.textContent || '0', 10);
+            const next = Math.max(0, current - 1);
+            notifCountEl.textContent = String(next);
+            if (next === 0) {
+                notifCountEl.classList.add('d-none');
             }
-            closeNotifMenu();
-            // If on notifications.html, you can navigate to details. Example:
-            // window.location.href = `notification-detail.html?id=${id}`;
+            
+            // Close dropdown using Bootstrap's API
+            const dropdown = bootstrap.Dropdown.getInstance(document.getElementById('notif-bell'));
+            if (dropdown) {
+                dropdown.hide();
+            }
         });
     }
 
