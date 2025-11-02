@@ -174,16 +174,16 @@
         });
     }
 
-    // -- Nav active link highlight --
-    const navLinks = document.querySelectorAll('.nav-link');
-    if (navLinks.length) {
-        const current = location.pathname.split('/').pop() || 'index.html';
-        navLinks.forEach(a => {
-            const href = a.getAttribute('href') || '';
-            if (href === current) a.classList.add('bg-blue-50');
-            else a.classList.remove('bg-blue-50');
-        });
-    }
+            // -- Nav active link highlight --
+            const navLinks = document.querySelectorAll('.nav-link');
+            if (navLinks.length) {
+                    const current = location.pathname.split('/').pop() || 'index.html';
+                    navLinks.forEach(a => {
+                            const href = a.getAttribute('href') || '';
+                            if (href === current) a.classList.add('bg-blue-50');
+                            else a.classList.remove('bg-blue-50');
+                    });
+            }
   }
 
   // Run when the DOM is ready
