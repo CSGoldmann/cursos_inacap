@@ -3,36 +3,46 @@
 console.log("✅ app.js cargado correctamente");
 
 // =========================
-// 🔌 Conexión con Socket.IO
+// 🔌 Conexión con Socket.IO (solo si está disponible)
 // =========================
-const socket = io("http://localhost:3000");
+let socket = null;
 
-// Cuando el cliente se conecta correctamente
-socket.on("connect", () => {
-  console.log("🟢 Conectado al servidor con ID:", socket.id);
-});
+if (typeof io !== 'undefined') {
+  socket = io("http://localhost:3000");
 
-// Escuchar notificaciones desde el servidor
-socket.on("notificacion_diploma", (data) => {
-  console.log("🎓 Notificación diploma:", data);
-  alert("🎓 Diploma emitido: " + data.mensaje);
-  agregarNotificacion("🎓 " + data.mensaje);
-});
+  // Cuando el cliente se conecta correctamente
+  socket.on("connect", () => {
+    console.log("🟢 Conectado al servidor con ID:", socket.id);
+  });
 
-socket.on("notificacion_admin", (data) => {
-  console.log("📚 Notificación admin:", data);
-  alert("📚 Nuevo curso publicado: " + data.titulo);
-  agregarNotificacion("📚 " + data.titulo);
-});
+  // Escuchar notificaciones desde el servidor
+  socket.on("notificacion_diploma", (data) => {
+    console.log("🎓 Notificación diploma:", data);
+    alert("🎓 Diploma emitido: " + data.mensaje);
+    agregarNotificacion("🎓 " + data.mensaje);
+  });
 
-// Funciones para emitir eventos hacia el servidor (pueden llamarse desde consola o botones)
-window.emitirDiploma = function () {
-  socket.emit("diploma_emitido", { mensaje: "Diploma disponible para descarga" });
-};
+  socket.on("notificacion_admin", (data) => {
+    console.log("📚 Notificación admin:", data);
+    alert("📚 Nuevo curso publicado: " + data.titulo);
+    agregarNotificacion("📚 " + data.titulo);
+  });
 
-window.nuevoCurso = function () {
-  socket.emit("nuevo_curso", { titulo: "Curso de Node.js avanzado" });
-};
+  // Funciones para emitir eventos hacia el servidor (pueden llamarse desde consola o botones)
+  window.emitirDiploma = function () {
+    if (socket) {
+      socket.emit("diploma_emitido", { mensaje: "Diploma disponible para descarga" });
+    }
+  };
+
+  window.nuevoCurso = function () {
+    if (socket) {
+      socket.emit("nuevo_curso", { titulo: "Curso de Node.js avanzado" });
+    }
+  };
+} else {
+  console.log("⚠️ Socket.IO no está disponible en esta página");
+}
 
 // ===============================
 // 💾 Manejo de notificaciones
@@ -89,11 +99,17 @@ window.limpiarNotificaciones = function () {
 // ===============================
 // 🔔 Mostrar/Ocultar panel
 // ===============================
-window.toggleNotificaciones = function () {
+window.toggleNotificaciones = async function () {
   const panel = document.getElementById("contenedor-notificaciones");
   if (!panel) return;
   panel.classList.toggle("visible");
-  cargarNotificaciones();
+  
+  // Usar API de BD si está disponible
+  if (window.notificacionesAPI && window.auth && window.auth.estaAutenticado()) {
+    await window.notificacionesAPI.cargarNotificaciones();
+  } else {
+    cargarNotificaciones();
+  }
 };
 
 // =============================================
@@ -109,18 +125,96 @@ window.toggleNotificaciones = function () {
     // -- Login --
     const loginForm = document.getElementById("login-form");
     if (loginForm) {
-      loginForm.addEventListener("submit", (e) => {
+      loginForm.addEventListener("submit", async (e) => {
         e.preventDefault();
-        window.location.href = "index.html";
+        const email = document.getElementById("email").value;
+        const password = document.getElementById("password").value;
+        
+        // Mostrar loading
+        const submitBtn = loginForm.querySelector('button[type="submit"]');
+        const originalText = submitBtn.textContent;
+        submitBtn.disabled = true;
+        submitBtn.textContent = "Iniciando sesión...";
+
+        // Intentar login
+        const messageDiv = document.getElementById("auth-message");
+        if (messageDiv) messageDiv.innerHTML = "";
+        
+        const resultado = await window.auth.login(email, password);
+        
+        if (resultado.success) {
+          console.log('✅ Login exitoso, usuario:', resultado.usuario);
+          
+          // Esperar un momento para que la cookie de sesión se establezca completamente
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          // Verificar una vez más antes de redirigir
+          const verificado = await window.auth.init();
+          if (verificado) {
+            console.log('✅ Sesión verificada, redirigiendo...');
+            window.location.href = "index.html";
+          } else {
+            console.error('⚠️ Sesión no verificada después del login');
+            // Intentar de todos modos después de un delay
+            setTimeout(() => {
+              window.location.href = "index.html";
+            }, 500);
+          }
+        } else {
+          if (messageDiv) {
+            messageDiv.innerHTML = `<div class="alert alert-danger">${resultado.error || "Credenciales inválidas"}</div>`;
+          } else {
+            alert("Error: " + (resultado.error || "Credenciales inválidas"));
+          }
+          submitBtn.disabled = false;
+          submitBtn.textContent = originalText;
+        }
+      });
+    }
+
+    const registerForm = document.getElementById("register-form");
+    if (registerForm) {
+      registerForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const nombre = document.getElementById("reg-nombre").value;
+        const apellido = document.getElementById("reg-apellido").value;
+        const email = document.getElementById("reg-email").value;
+        const password = document.getElementById("reg-password").value;
+        const submitBtn = registerForm.querySelector('button[type="submit"]');
+        const originalText = submitBtn.textContent;
+        const messageDiv = document.getElementById("auth-message");
+        
+        submitBtn.disabled = true;
+        submitBtn.textContent = "Registrando...";
+        if (messageDiv) messageDiv.innerHTML = "";
+        
+        const resultado = await window.auth.register(email, password, nombre, apellido);
+        
+        if (resultado.success) {
+          if (messageDiv) {
+            messageDiv.innerHTML = `<div class="alert alert-success">¡Registro exitoso! Redirigiendo...</div>`;
+          }
+          setTimeout(() => {
+            window.location.href = "index.html";
+          }, 1000);
+        } else {
+          if (messageDiv) {
+            messageDiv.innerHTML = `<div class="alert alert-danger">${resultado.error || "Error al registrar usuario"}</div>`;
+          } else {
+            alert("Error: " + (resultado.error || "Error al registrar usuario"));
+          }
+          submitBtn.disabled = false;
+          submitBtn.textContent = originalText;
+        }
       });
     }
 
     // -- Logout --
     const logoutButton = document.getElementById("logout-button");
     if (logoutButton) {
-      logoutButton.addEventListener("click", (e) => {
+      logoutButton.addEventListener("click", async (e) => {
         e.preventDefault();
-        window.location.href = "login.html";
+        await window.auth.logout();
       });
     }
 
@@ -182,7 +276,34 @@ window.toggleNotificaciones = function () {
   document.addEventListener("partial-loaded", initApp);
 })();
 
-// Cargar notificaciones al iniciar
-document.addEventListener("DOMContentLoaded", () => {
-  cargarNotificaciones();
+// Cargar notificaciones al iniciar (usando API de BD si está disponible)
+document.addEventListener("DOMContentLoaded", async () => {
+  // Solo cargar notificaciones si no estamos en login.html
+  if (window.location.pathname.includes('login.html')) {
+    return;
+  }
+  
+  // Esperar a que auth esté disponible
+  await new Promise(resolve => setTimeout(resolve, 200));
+  
+  // Si existe la API de notificaciones de BD, usarla
+  if (window.notificacionesAPI && window.auth) {
+    try {
+      const autenticado = await window.auth.init();
+      if (autenticado) {
+        await window.notificacionesAPI.cargarNotificaciones();
+      }
+    } catch (error) {
+      console.error('Error al cargar notificaciones:', error);
+      // Fallback a localStorage
+      if (typeof cargarNotificaciones === 'function') {
+        cargarNotificaciones();
+      }
+    }
+  } else {
+    // Fallback a localStorage
+    if (typeof cargarNotificaciones === 'function') {
+      cargarNotificaciones();
+    }
+  }
 });

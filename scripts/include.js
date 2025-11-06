@@ -59,32 +59,36 @@
       if (containerId === 'header') {
         const markBtn = document.getElementById('mark-all-read');
         if (markBtn) {
-          markBtn.addEventListener('click', () => {
+          markBtn.addEventListener('click', async () => {
             try {
-              const notifList = document.getElementById('notif-list');
-              const notifCount = document.getElementById('notif-count');
-              const notifMenu = document.getElementById('notif-menu');
-              const notifBell = document.getElementById('notif-bell');
+              // Si existe API de BD, usarla
+              if (window.notificacionesAPI && window.auth && window.auth.estaAutenticado()) {
+                await window.notificacionesAPI.marcarTodasComoLeidas();
+                await window.notificacionesAPI.cargarNotificaciones();
+              } else {
+                // Fallback a localStorage
+                const notifList = document.getElementById('notif-list');
+                const notifCount = document.getElementById('notif-count');
+                const notifMenu = document.getElementById('notif-menu');
+                const notifBell = document.getElementById('notif-bell');
 
-              // Replace the list with a friendly 'no notifications' message
-              if (notifList) {
-                notifList.innerHTML = '<div class="px-3 py-3 text-center text-secondary small">No hay notificaciones</div>';
-              }
-
-              // Hide the badge / count
-              if (notifCount) {
-                notifCount.textContent = '';
-                notifCount.classList.add('d-none');
-              }
-
-              // Close the dropdown if it's open (uses Bootstrap's Dropdown API if available)
-              try {
-                if (typeof bootstrap !== 'undefined' && notifBell) {
-                  const bs = bootstrap.Dropdown.getInstance(notifBell) || new bootstrap.Dropdown(notifBell);
-                  bs.hide();
+                if (notifList) {
+                  notifList.innerHTML = '<div class="px-3 py-3 text-center text-secondary small">No hay notificaciones</div>';
                 }
-              } catch (err) {
-                // ignore dropdown close errors
+
+                if (notifCount) {
+                  notifCount.textContent = '';
+                  notifCount.classList.add('d-none');
+                }
+
+                try {
+                  if (typeof bootstrap !== 'undefined' && notifBell) {
+                    const bs = bootstrap.Dropdown.getInstance(notifBell) || new bootstrap.Dropdown(notifBell);
+                    bs.hide();
+                  }
+                } catch (err) {
+                  // ignore dropdown close errors
+                }
               }
             } catch (err) {
               console.error('Error marking notifications as read:', err);
@@ -97,9 +101,11 @@
     }
   });
 
-  // load both sidebar and header
-  await Promise.all([
-    loadPartial('partials/sidebar.html', 'sidebar'),
-    loadPartial('partials/header.html', 'header')
-  ]);
+  // load both sidebar and header - solo si no estamos en login.html
+  if (!window.location.pathname.includes('login.html')) {
+    await Promise.all([
+      loadPartial('partials/sidebar.html', 'sidebar'),
+      loadPartial('partials/header.html', 'header')
+    ]);
+  }
 })();

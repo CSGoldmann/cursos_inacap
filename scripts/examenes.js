@@ -1,0 +1,84 @@
+// scripts/examenes.js
+// API para exámenes
+
+const API_BASE_URL = 'http://localhost:3000/api';
+
+// Obtener examen de una sección o final
+async function obtenerExamen(cursoId, seccionId, esFinal = false) {
+  try {
+    let url = `${API_BASE_URL}/examenes/curso/${cursoId}`;
+    if (esFinal) {
+      url += '?tipo=final';
+    } else if (seccionId) {
+      url += `?seccion=${seccionId}`;
+    } else {
+      // Si no es final ni tiene seccionId, buscar examen de sección
+      url += '?tipo=seccion';
+    }
+
+    const response = await fetch(url, {
+      credentials: 'include'
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      return data.examen || data;
+    } else if (response.status === 404) {
+      console.log('No se encontró examen para esta sección');
+      return null;
+    }
+    return null;
+  } catch (error) {
+    console.error('Error al obtener examen:', error);
+    return null;
+  }
+}
+
+// Enviar examen
+async function enviarExamen(cursoId, examenId, respuestas) {
+  try {
+    const response = await fetch(`${API_BASE_URL}/examenes/${examenId}/enviar`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      credentials: 'include',
+      body: JSON.stringify({
+        cursoId,
+        respuestas
+      })
+    });
+
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Error al enviar examen:', error);
+    return { success: false, error: 'Error de conexión' };
+  }
+}
+
+// Obtener resultados de exámenes del usuario
+async function obtenerResultadosExamenes(cursoId) {
+  try {
+    const response = await fetch(`${API_BASE_URL}/examenes/curso/${cursoId}/resultados`, {
+      credentials: 'include'
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      return data;
+    }
+    return [];
+  } catch (error) {
+    console.error('Error al obtener resultados:', error);
+    return [];
+  }
+}
+
+// Exportar funciones
+window.examenesAPI = {
+  obtenerExamen,
+  enviarExamen,
+  obtenerResultadosExamenes
+};
+

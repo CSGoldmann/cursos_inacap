@@ -19,7 +19,7 @@
         <div class="flex-grow-1 d-flex flex-column">
             <div id="header"></div>
             <main class="flex-grow-1 p-4 p-lg-5 overflow-auto">
-                <div class="container">
+                <div class="container" id="curso-detalle-container">
                     <div class="row">
                         <div class="col-lg-8">
                             <div class="course-hero mb-4">
@@ -173,7 +173,7 @@
                             <div class="card p-3 mb-3">
                                 <div class="fs-5 fw-semibold">Acceso al curso</div>
                                 <div class="small text-secondary mb-3">Comienza ahora y accede a todas las lecciones</div>
-                                <a class="btn btn-primary w-100 mb-2" href="#">Empezar ahora</a>
+                                <button id="btn-empezar-ahora" class="btn btn-primary w-100 mb-2">Empezar ahora</button>
                                 <a class="btn btn-outline-secondary w-100" href="#">Guardar en Favoritos</a>
                             </div>
                             <div class="card p-3">
@@ -191,8 +191,77 @@
         </div>
     </div>
 
+    <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script src="scripts/include.js"></script>
+    <script src="scripts/api.js"></script>
+    <script src="scripts/auth.js"></script>
+    <script src="scripts/inscripciones.js"></script>
+    <script src="scripts/curso-detalle.js"></script>
     <script src="scripts/app.js"></script>
+    <script>
+    // Funcionalidad del botón "Empezar ahora"
+    document.addEventListener('DOMContentLoaded', async () => {
+      const btnEmpezar = document.getElementById('btn-empezar-ahora');
+      if (btnEmpezar) {
+        // Verificar autenticación
+        if (window.auth) {
+          await window.auth.init();
+          
+          if (!window.auth.estaAutenticado()) {
+            btnEmpezar.textContent = 'Iniciar sesión para comenzar';
+            btnEmpezar.onclick = () => window.location.href = 'login.html';
+            return;
+          }
+
+          // Obtener ID del curso
+          const params = new URLSearchParams(window.location.search);
+          const cursoId = params.get('id');
+          
+          if (!cursoId || cursoId.startsWith('static-')) {
+            btnEmpezar.disabled = true;
+            btnEmpezar.textContent = 'Curso de demostración';
+            return;
+          }
+
+          // Verificar si ya está inscrito
+          const estaInscrito = await window.inscripcionesAPI.estaInscrito(cursoId);
+          
+          if (estaInscrito) {
+            btnEmpezar.textContent = 'Continuar curso';
+            btnEmpezar.className = 'btn btn-success w-100 mb-2';
+            btnEmpezar.onclick = () => {
+              window.location.href = `curso-vista.html?id=${cursoId}`;
+            };
+          } else {
+            btnEmpezar.onclick = async () => {
+              btnEmpezar.disabled = true;
+              btnEmpezar.textContent = 'Inscribiendo...';
+              
+              const resultado = await window.inscripcionesAPI.inscribirse(cursoId);
+              
+              if (resultado.success) {
+                btnEmpezar.textContent = 'Continuar curso';
+                btnEmpezar.className = 'btn btn-success w-100 mb-2';
+                alert('¡Te has inscrito exitosamente al curso!');
+                // Recargar notificaciones si existe el API
+                if (window.notificacionesAPI) {
+                  await window.notificacionesAPI.cargarNotificaciones();
+                }
+                // Redirigir a la vista del curso
+                setTimeout(() => {
+                  window.location.href = `curso-vista.html?id=${cursoId}`;
+                }, 1000);
+              } else {
+                alert('Error: ' + (resultado.error || 'No se pudo inscribir'));
+                btnEmpezar.disabled = false;
+                btnEmpezar.textContent = 'Empezar ahora';
+              }
+            };
+          }
+        }
+      }
+    });
+    </script>
 </body>
 </html>
