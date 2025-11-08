@@ -8,6 +8,86 @@ let seccionActual = null;
 let indiceSeccionActual = 0;
 let indiceLeccionActual = 0;
 
+const MEDIA_MIME_TYPES = {
+  '.mp4': 'video/mp4',
+  '.webm': 'video/webm',
+  '.ogg': 'video/ogg',
+  '.mov': 'video/quicktime',
+  '.m4v': 'video/x-m4v',
+  '.mp3': 'audio/mpeg',
+  '.wav': 'audio/wav',
+  '.aac': 'audio/aac',
+  '.oga': 'audio/ogg'
+};
+
+function resolverMediaUrl(url, tipo) {
+  if (!url) return null;
+  if (url.startsWith('/api/media/')) return url;
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+
+  if (tipo === 'video' && url.startsWith('/uploads/videos/')) {
+    return url.replace('/uploads/videos/', '/api/media/videos/');
+  }
+
+  if (tipo === 'audio' && url.startsWith('/uploads/audios/')) {
+    return url.replace('/uploads/audios/', '/api/media/audios/');
+  }
+
+  return url;
+}
+
+function obtenerMimeDesdeUrl(url, tipoPorDefecto) {
+  if (!url) return tipoPorDefecto;
+  const match = url.match(/\.[a-z0-9]+$/i);
+  if (!match) return tipoPorDefecto;
+
+  const extension = match[0].toLowerCase();
+  return MEDIA_MIME_TYPES[extension] || tipoPorDefecto;
+}
+
+function obtenerProgresoLeccionActual() {
+  if (!inscripcionActual || !leccionActual) return null;
+  return inscripcionActual.progresoLecciones?.find(
+    p => p.leccionId.toString() === (leccionActual._id || leccionActual.id).toString()
+  ) || null;
+}
+
+async function recargarInscripcionActual() {
+  if (!cursoActual) return;
+  const cursoId = cursoActual._id || cursoActual.id;
+  const inscripciones = await window.inscripcionesAPI.obtenerInscripciones();
+  inscripcionActual = Array.isArray(inscripciones)
+    ? inscripciones.find(i => {
+        const cursoIdInsc = i.curso._id || i.curso;
+        return cursoIdInsc && cursoIdInsc.toString() === cursoId.toString();
+      })
+    : null;
+}
+
+async function registrarVideoCompletado() {
+  if (!cursoActual || !leccionActual) return;
+
+  try {
+    const cursoId = cursoActual._id || cursoActual.id;
+    const resultado = await window.inscripcionesAPI.actualizarProgreso(
+      cursoId,
+      leccionActual._id,
+      {
+        videoCompletado: true,
+        progreso: 100
+      }
+    );
+
+    if (resultado) {
+      await recargarInscripcionActual();
+      renderizarSidebar();
+      actualizarNavegacion();
+    }
+  } catch (error) {
+    console.error('Error al registrar video completado:', error);
+  }
+}
+
 // Obtener ID del curso desde la URL
 function obtenerCursoId() {
   const params = new URLSearchParams(window.location.search);
@@ -227,43 +307,48 @@ function mostrarLeccion(leccion) {
     ${leccion.descripcion ? `<p class="text-muted">${leccion.descripcion}</p>` : ''}
   `;
 
-  // Mostrar contenido según tipo
-  if (leccion.tipo === 'video' && leccion.urlVideo) {
-    html += `
-      <div class="mt-4">
-        <video class="video-player" controls>
-          <source src="${leccion.urlVideo}" type="video/mp4">
-          Tu navegador no soporta el elemento de video.
-        </video>
-      </div>
-    `;
-  } else if (leccion.tipo === 'audio' && leccion.urlAudio) {
-    html += `
-      <div class="mt-4">
-        <audio class="audio-player" controls>
-          <source src="${leccion.urlAudio}" type="audio/mpeg">
-          Tu navegador no soporta el elemento de audio.
-        </audio>
-      </div>
-    `;
+  let videoSrc = null;
+
+  if (leccion.tipo === 'video') {
+    videoSrc = resolverMediaUrl(leccion.urlVideo, 'video');
+    if (videoSrc) {
+      const mimeType = obtenerMimeDesdeUrl(videoSrc, 'video/mp4');
+      html += `
+        <div class="mt-4">
+          <video class="video-player" controls preload="metadata">
+            <source src="${videoSrc}" type="${mimeType}">
+            Tu navegador no soporta el elemento de video.
+          </video>
+        </div>
+      `;
+    } else {
+      html += `
+        <div class="alert alert-warning mt-4">
+          <i class="bi bi-exclamation-triangle"></i> No se encontró el video asociado a esta lección.
+        </div>
+      `;
+    }
+  } else if (leccion.tipo === 'audio') {
+    const audioSrc = resolverMediaUrl(leccion.urlAudio, 'audio');
+    if (audioSrc) {
+      const mimeType = obtenerMimeDesdeUrl(audioSrc, 'audio/mpeg');
+      html += `
+        <div class="mt-4">
+          <audio class="audio-player" controls preload="metadata">
+            <source src="${audioSrc}" type="${mimeType}">
+            Tu navegador no soporta el elemento de audio.
+          </audio>
+        </div>
+      `;
+    }
   } else if (leccion.tipo === 'texto') {
-    // Si hay contenido, mostrarlo, sino mostrar lorem ipsum
     if (leccion.contenido) {
       html += `<div class="mt-4">${leccion.contenido}</div>`;
     } else {
       html += `
         <div class="mt-4">
           <h4>${leccion.titulo}</h4>
-          <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</p>
-          <h5>Conceptos Clave</h5>
-          <ul>
-            <li>Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.</li>
-            <li>Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.</li>
-            <li>Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium.</li>
-          </ul>
-          <h5>Ejemplos Prácticos</h5>
-          <p>At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium voluptatum deleniti atque corrupti quos dolores et quas molestias excepturi sint occaecati cupiditate non provident.</p>
-          <p>Similique sunt in culpa qui officia deserunt mollitia animi, id est laborum et dolorum fuga. Et harum quidem rerum facilis est et expedita distinctio.</p>
+          <p>Esta lección profundiza en "${leccion.titulo}" como parte de la sección "${seccionActual?.titulo || ''}". Usa los recursos descargables para poner en práctica cada concepto.</p>
         </div>
       `;
     }
@@ -275,7 +360,32 @@ function mostrarLeccion(leccion) {
     `;
   }
 
+  if (leccion.tipo !== 'texto' && leccion.contenido) {
+    html += `<div class="mt-4">${leccion.contenido}</div>`;
+  }
+
   contenido.innerHTML = html;
+
+  if (leccion.tipo === 'video') {
+    const videoElement = contenido.querySelector('video');
+    if (videoElement) {
+      videoElement.dataset.reported = videoElement.dataset.reported || '';
+      const marcarFinalizado = () => {
+        if (videoElement.dataset.reported === 'done') return;
+        videoElement.dataset.reported = 'done';
+        registrarVideoCompletado();
+      };
+
+      videoElement.addEventListener('ended', marcarFinalizado);
+      videoElement.addEventListener('timeupdate', () => {
+        if (!videoElement.duration) return;
+        const porcentaje = videoElement.currentTime / videoElement.duration;
+        if (porcentaje >= 0.95) {
+          marcarFinalizado();
+        }
+      });
+    }
+  }
 
   // Mostrar navegación
   const nav = document.getElementById('navegacion-lecciones');
@@ -345,11 +455,18 @@ function actualizarNavegacion() {
       p => p.leccionId.toString() === leccionActual._id.toString()
     );
     const completada = progreso && progreso.completado;
+    const videoVisto = progreso && progreso.videoCompletado;
 
     btnMarcar.innerHTML = completada 
       ? '<i class="bi bi-check-circle-fill"></i> Completada'
       : '<i class="bi bi-check-circle"></i> Marcar como Completada';
     btnMarcar.className = completada ? 'btn btn-success' : 'btn btn-outline-success';
+    btnMarcar.disabled = !completada && !videoVisto;
+    if (!completada && !videoVisto) {
+      btnMarcar.title = 'Debes visualizar el video para habilitar esta acción.';
+    } else {
+      btnMarcar.removeAttribute('title');
+    }
     
     btnMarcar.onclick = async () => {
       await marcarLeccionCompletada(!completada);
@@ -379,22 +496,26 @@ async function marcarLeccionCompletada(completado) {
 
   try {
     const cursoId = cursoActual._id || cursoActual.id;
+    const progreso = obtenerProgresoLeccionActual();
+
+    if (completado) {
+      if (!progreso || !progreso.videoCompletado) {
+        alert('Debes visualizar el video completo antes de marcar la lección como completada.');
+        return;
+      }
+    }
+
     const resultado = await window.inscripcionesAPI.actualizarProgreso(
       cursoId,
       leccionActual._id,
-      completado,
-      completado ? 100 : 0
+      {
+        completado,
+        progreso: completado ? 100 : 0
+      }
     );
 
     if (resultado) {
-      // Recargar inscripción
-      const inscripciones = await window.inscripcionesAPI.obtenerInscripciones();
-      inscripcionActual = inscripciones.find(i => {
-        const cursoIdInsc = i.curso._id || i.curso;
-        return cursoIdInsc.toString() === cursoId.toString();
-      });
-
-      // Actualizar UI
+      await recargarInscripcionActual();
       renderizarSidebar();
       actualizarNavegacion();
     }
@@ -410,12 +531,7 @@ async function actualizarUltimaLeccion(leccionId) {
 
   try {
     const cursoId = cursoActual._id || cursoActual.id;
-    await window.inscripcionesAPI.actualizarProgreso(
-      cursoId,
-      leccionId,
-      null,
-      null
-    );
+    await window.inscripcionesAPI.actualizarProgreso(cursoId, leccionId, {});
   } catch (error) {
     console.error('Error al actualizar última lección:', error);
   }

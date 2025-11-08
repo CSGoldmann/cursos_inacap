@@ -2,6 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const Notificacion = require('../models/Notificacion');
+const Usuario = require('../models/Usuario');
 
 // Middleware para verificar autenticación
 const requireAuth = (req, res, next) => {
@@ -21,18 +22,19 @@ router.get('/', requireAuth, async (req, res) => {
       query.leida = leidas === 'true';
     }
 
-    const notificaciones = await Notificacion.find(query)
-      .sort({ fechaCreacion: -1 })
-      .limit(parseInt(limite));
+    const [notificaciones, usuario] = await Promise.all([
+      Notificacion.find(query)
+        .sort({ fechaCreacion: -1 })
+        .limit(parseInt(limite)),
+      Usuario.findById(req.session.usuario.id).select('notificacionesNoLeidas')
+    ]);
 
-    const noLeidas = await Notificacion.countDocuments({
-      usuario: req.session.usuario.id,
-      leida: false
-    });
+    const pendientes = usuario?.notificacionesNoLeidas || [];
 
     res.json({
       notificaciones,
-      noLeidas
+      noLeidas: pendientes.length,
+      pendientes
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -55,6 +57,17 @@ router.put('/:id/leer', requireAuth, async (req, res) => {
     notificacion.fechaLeida = new Date();
     await notificacion.save();
 
+    await Usuario.findByIdAndUpdate(
+      req.session.usuario.id,
+      { $pull: { notificacionesNoLeidas: { notificacion: notificacion._id } } }
+    );
+
+    if (req.session.usuario) {
+      req.session.usuario.notificacionesNoLeidas = (req.session.usuario.notificacionesNoLeidas || []).filter(
+        n => n.notificacion !== notificacion._id.toString()
+      );
+    }
+
     res.json({ success: true, notificacion });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -76,6 +89,14 @@ router.put('/leer-todas', requireAuth, async (req, res) => {
         }
       }
     );
+    await Usuario.findByIdAndUpdate(
+      req.session.usuario.id,
+      { $set: { notificacionesNoLeidas: [] } }
+    );
+
+    if (req.session.usuario) {
+      req.session.usuario.notificacionesNoLeidas = [];
+    }
 
     res.json({ success: true, message: 'Todas las notificaciones marcadas como leídas' });
   } catch (error) {
@@ -93,6 +114,17 @@ router.delete('/:id', requireAuth, async (req, res) => {
 
     if (!notificacion) {
       return res.status(404).json({ error: 'Notificación no encontrada' });
+    }
+
+    await Usuario.findByIdAndUpdate(
+      req.session.usuario.id,
+      { $pull: { notificacionesNoLeidas: { notificacion: notificacion._id } } }
+    );
+
+    if (req.session.usuario) {
+      req.session.usuario.notificacionesNoLeidas = (req.session.usuario.notificacionesNoLeidas || []).filter(
+        n => n.notificacion !== notificacion._id.toString()
+      );
     }
 
     res.json({ success: true, message: 'Notificación eliminada' });

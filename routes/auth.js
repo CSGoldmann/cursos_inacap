@@ -29,6 +29,21 @@ router.post('/login', async (req, res) => {
       return res.status(403).json({ error: 'Usuario desactivado' });
     }
 
+    const progresoCursos = (usuario.progresoCursos || []).map(item => ({
+      curso: item.curso ? item.curso.toString() : null,
+      progreso: item.progreso || 0,
+      actualizadoEn: item.actualizadoEn || usuario.fechaActualizacion || new Date()
+    }));
+
+    const notificacionesNoLeidas = (usuario.notificacionesNoLeidas || []).map(item => ({
+      notificacion: item.notificacion ? item.notificacion.toString() : null,
+      titulo: item.titulo,
+      mensaje: item.mensaje,
+      tipo: item.tipo,
+      link: item.link,
+      fecha: item.fecha || new Date()
+    }));
+
     // Guardar sesión (sin password)
     req.session.usuario = {
       id: usuario._id,
@@ -37,7 +52,10 @@ router.post('/login', async (req, res) => {
       apellido: usuario.apellido,
       nombreCompleto: `${usuario.nombre} ${usuario.apellido}`,
       fotoPerfil: usuario.fotoPerfil,
-      rol: usuario.rol
+      rol: usuario.rol,
+      cursosInscritos: (usuario.cursosInscritos || []).map(cursoId => cursoId.toString()),
+      progresoCursos,
+      notificacionesNoLeidas
     };
 
     // Guardar la sesión explícitamente
@@ -122,7 +140,10 @@ router.post('/register', async (req, res) => {
       apellido: nuevoUsuario.apellido,
       nombreCompleto: `${nuevoUsuario.nombre} ${nuevoUsuario.apellido}`,
       fotoPerfil: nuevoUsuario.fotoPerfil,
-      rol: nuevoUsuario.rol
+      rol: nuevoUsuario.rol,
+      cursosInscritos: [],
+      progresoCursos: [],
+      notificacionesNoLeidas: []
     };
 
     res.status(201).json({
@@ -134,7 +155,10 @@ router.post('/register', async (req, res) => {
         nombre: nuevoUsuario.nombre,
         apellido: nuevoUsuario.apellido,
         nombreCompleto: `${nuevoUsuario.nombre} ${nuevoUsuario.apellido}`,
-        rol: nuevoUsuario.rol
+        rol: nuevoUsuario.rol,
+        cursosInscritos: [],
+        progresoCursos: [],
+        notificacionesNoLeidas: []
       }
     });
   } catch (error) {

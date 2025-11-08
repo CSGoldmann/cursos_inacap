@@ -6,6 +6,10 @@ const ProgresoLeccionSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     required: true
   },
+  videoCompletado: {
+    type: Boolean,
+    default: false
+  },
   completado: {
     type: Boolean,
     default: false

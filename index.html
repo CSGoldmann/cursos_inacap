@@ -30,257 +30,46 @@
             <main class="flex-grow-1 p-4 p-lg-5 overflow-auto">
 
                 <div id="dashboard-content">
-                    <h2 class="display-6 fw-bold mb-4">Mis cursos</h2>
-                    <p class="text-secondary mb-4">Vista rápida</p>
+                    <section class="hero-banner rounded-4 position-relative overflow-hidden p-4 p-lg-5 mb-5 shadow-sm">
+                        <div class="position-relative" style="z-index: 1;">
+                            <span class="hero-badge text-uppercase small">Biblioteca multimedia</span>
+                            <h1 class="display-6 fw-bold mt-3">
+                                Continúa donde quedaste y descubre lecciones nuevas con video en alta definición.
+                            </h1>
+                            <p class="mb-0 mt-3 lead">
+                                Accede a rutas especializadas en ciberseguridad, análisis de datos y machine learning, con evaluaciones prácticas y recursos descargables.
+                            </p>
+                        </div>
+                    </section>
 
-                    
-                    <!-- Cursos dinámicos se cargarán aquí -->
-                    <div id="cursos-activos-container" class="row row-cols-1 row-cols-md-3 g-4">
-                        <!-- Cybersecurity -->
-                        <div class="col">
-                            <div class="card h-100 shadow-sm">
-                                <div class="position-relative">
-                                    <a href="curso.html?id=static-cybersecurity">
-                                        <img src="Pictures/Ciberseguridad.jpg" class="card-img-top" alt="Cybersecurity course">
-                                    </a>
-                                    <div class="dropdown position-absolute top-0 end-0 m-2">
-                                        <button class="btn btn-light rounded-0 border dropdown-toggle p-1" type="button" id="menu-1" data-bs-toggle="dropdown" aria-expanded="false" aria-label="menu"></button>
-                                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="menu-1">
-                                            <li><a class="dropdown-item" href="#"><img src="Pictures/restart.png" style="width: 16px; height: 16px; margin-right: 8px;">Reiniciar Curso</a></li>
-                                            <li><a class="dropdown-item" href="#"><img src="Pictures/heart.png" style="width: 16px; height: 16px; margin-right: 8px;">Favorito</a></li>
-                                            <li><a class="dropdown-item" href="#"><img src="Pictures/save-file.png" style="width: 16px; height: 16px; margin-right: 8px;">Archivar</a></li>
-                                            <li><a class="dropdown-item" href="#"><img src="Pictures/share.png" style="width: 16px; height: 16px; margin-right: 8px;">Compartir</a></li>
-                                        </ul>
-                                    </div>
-                                </div>
-                                <div class="card-body py-2">
-                                    <h6 class="card-title mb-1"><a href="curso.html?id=static-cybersecurity" class="text-decoration-none text-dark">Fundamentos de Ciberseguridad</a></h6>
-                                    <p class="text-muted small mb-2">Profesor: Johnathan Fletcher</p>
-                                    <div class="progress" style="height:6px;">
-                                        <div class="progress-bar" role="progressbar" style="width:62%" aria-valuenow="62" aria-valuemin="0" aria-valuemax="100"></div>
-                                    </div>
-                                    <div class="d-flex justify-content-between align-items-center mt-2 small text-secondary">
-                                        <div class="text-warning">★★★★☆</div>
-                                        <div>62% complete</div>
-                                    </div>
-                                </div>
-                                <div class="card-footer bg-transparent border-0 pb-3 pt-0">
-                                    <div class="dropdown">
-                                        <a class="small dropdown-toggle" href="#" role="button" id="dropdown-course-1" data-bs-toggle="dropdown" aria-expanded="false">Detalles</a>
-                                        <ul class="dropdown-menu" aria-labelledby="dropdown-course-1">
-                                            <li><a class="dropdown-item">1. Introducción a la ciberseguridad</a></li>
-                                            <li><a class="dropdown-item">2. Arquitectura y modelos</a></li>
-                                            <li><a class="dropdown-item">3. Amenazas y vectores</a></li>
-                                            <li><a class="dropdown-item">4. Controles y mitigaciones</a></li>
-                                            <li><a class="dropdown-item">5. Seguridad en redes</a></li>
-                                            <li><a class="dropdown-item">6. Buenas prácticas y resumen</a></li>
-                                        </ul>
-                                    </div>
-                                </div>
+                    <section class="mb-5">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <div>
+                                <h2 class="h4 fw-semibold mb-1">Mis cursos</h2>
+                                <p class="text-secondary small mb-0">Retoma las rutas en las que ya estás inscrito.</p>
                             </div>
                         </div>
-
-                        <!-- Ethical Hacking -->
-                        <div class="col">
-                            <div class="card h-100 shadow-sm">
-                                <div class="position-relative">
-                                    <img src="Pictures/EthicalHacking.jpg" class="card-img-top" alt="Ethical Hacking course">
-                                    <div class="dropdown position-absolute top-0 end-0 m-2">
-                                        <button class="btn btn-light rounded-0 border dropdown-toggle p-1" type="button" id="menu-2" data-bs-toggle="dropdown" aria-expanded="false" aria-label="menu"></button>
-                                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="menu-2">
-                                            <li><a class="dropdown-item" href="#"><img src="Pictures/restart.png" style="width: 16px; height: 16px; margin-right: 8px;">Reiniciar Curso</a></li>
-                                            <li><a class="dropdown-item" href="#"><img src="Pictures/heart.png" style="width: 16px; height: 16px; margin-right: 8px;">Favorito</a></li>
-                                            <li><a class="dropdown-item" href="#"><img src="Pictures/save-file.png" style="width: 16px; height: 16px; margin-right: 8px;">Archivar</a></li>
-                                            <li><a class="dropdown-item" href="#"><img src="Pictures/share.png" style="width: 16px; height: 16px; margin-right: 8px;">Compartir</a></li>
-                                        </ul>
-                                    </div>
-                                </div>
-                                <div class="card-body py-2">
-                                    <h6 class="card-title mb-1">Ethical Hacking</h6>
-                                    <p class="text-muted small mb-2">Profesor: René Guerrero</p>
-                                    <div class="progress" style="height:6px;">
-                                        <div class="progress-bar" role="progressbar" style="width:27%" aria-valuenow="27" aria-valuemin="0" aria-valuemax="100"></div>
-                                    </div>
-                                    <div class="d-flex justify-content-between align-items-center mt-2 small text-secondary">
-                                        <div class="text-warning">★★★☆☆</div>
-                                        <div>27% complete</div>
-                                    </div>
-                                </div>
-                                <div class="card-footer bg-transparent border-0 pb-3 pt-0">
-                                    <div class="dropdown">
-                                        <a class="small dropdown-toggle" href="#" role="button" id="dropdown-course-2" data-bs-toggle="dropdown" aria-expanded="false">Detalles</a>
-                                        <ul class="dropdown-menu" aria-labelledby="dropdown-course-2">
-                                            <li><a class="dropdown-item">1. Fundamentos de hacking ético</a></li>
-                                            <li><a class="dropdown-item">2. Recolección de información</a></li>
-                                            <li><a class="dropdown-item">3. Escaneo y enumeración</a></li>
-                                            <li><a class="dropdown-item">4. Explotación básica</a></li>
-                                            <li><a class="dropdown-item">5. Post-explotación</a></li>
-                                            <li><a class="dropdown-item">6. Informe y remediación</a></li>
-                                        </ul>
-                                    </div>
-                                </div>
+                        <div id="cursos-activos-container" class="row row-cols-1 row-cols-md-3 g-4">
+                            <div class="col-12 text-center text-muted" data-placeholder="mis-cursos">
+                                Cargando tus cursos...
                             </div>
                         </div>
+                    </section>
 
-                        <!-- Pen Testing -->
-                        <div class="col">
-                            <div class="card h-100 shadow-sm">
-                                <div class="position-relative">
-                                    <img src="Pictures/Pentesting.jpg" class="card-img-top" alt="Pen Testing course">
-                                    <div class="dropdown position-absolute top-0 end-0 m-2">
-                                        <button class="btn btn-light rounded-0 border dropdown-toggle p-1" type="button" id="menu-3" data-bs-toggle="dropdown" aria-expanded="false" aria-label="menu"></button>
-                                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="menu-3">
-                                            <li><a class="dropdown-item" href="#"><img src="Pictures/restart.png" style="width: 16px; height: 16px; margin-right: 8px;">Reiniciar Curso</a></li>
-                                            <li><a class="dropdown-item" href="#"><img src="Pictures/heart.png" style="width: 16px; height: 16px; margin-right: 8px;">Favorito</a></li>
-                                            <li><a class="dropdown-item" href="#"><img src="Pictures/save-file.png" style="width: 16px; height: 16px; margin-right: 8px;">Archivar</a></li>
-                                            <li><a class="dropdown-item" href="#"><img src="Pictures/share.png" style="width: 16px; height: 16px; margin-right: 8px;">Compartir</a></li>
-                                        </ul>
-                                    </div>
-                                </div>
-                                <div class="card-body py-2">
-                                    <h6 class="card-title mb-1">Pentesting</h6>
-                                    <p class="text-muted small mb-2">Profesor: René Guerrero</p>
-                                    <div class="progress" style="height:6px;">
-                                        <div class="progress-bar" role="progressbar" style="width:38%" aria-valuenow="38" aria-valuemin="0" aria-valuemax="100"></div>
-                                    </div>
-                                    <div class="d-flex justify-content-between align-items-center mt-2 small text-secondary">
-                                        <div class="text-warning">★★☆☆☆</div>
-                                        <div>38% complete</div>
-                                    </div>
-                                </div>
-                                <div class="card-footer bg-transparent border-0 pb-3 pt-0">
-                                    <div class="dropdown">
-                                        <a class="small dropdown-toggle" href="#" role="button" id="dropdown-course-3" data-bs-toggle="dropdown" aria-expanded="false">Detalles</a>
-                                        <ul class="dropdown-menu" aria-labelledby="dropdown-course-3">
-                                            <li><a class="dropdown-item">1. Introducción al pentesting</a></li>
-                                            <li><a class="dropdown-item">2. Laboratorio y herramientas</a></li>
-                                            <li><a class="dropdown-item">3. Pruebas de red</a></li>
-                                            <li><a class="dropdown-item">4. Pruebas de aplicaciones web</a></li>
-                                            <li><a class="dropdown-item">5. Pruebas de sistemas y servicios</a></li>
-                                            <li><a class="dropdown-item">6. Reporte final y recomendaciones</a></li>
-                                        </ul>
-                                    </div>
-                                </div>
+                    <section class="mb-4">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <div>
+                                <h2 class="h4 fw-semibold mb-1">Explorar catálogo</h2>
+                                <p class="text-secondary small mb-0">Inscríbete en nuevas especializaciones y suma progreso.</p>
                             </div>
                         </div>
-                    </div>
-                </div>
-
-                <div class="d-flex align-items-center justify-content-between mb-4">
-                    <div>
-                        <h2 class="fs-2 fw-semibold">Otros Cursos</h2>
-                        <p class="text-secondary small">Revisa tus opciones</p>
                         <div id="otros-cursos-container" class="row row-cols-1 row-cols-md-3 g-4">
-                        <!-- Cybersecurity -->
-                        <div class="col">
-                            <div class="card h-100 shadow-sm">
-                                <div class="position-relative">
-                                    <img src="Pictures/python.png" class="card-img-top" alt="Cybersecurity course">
-                                    <div class="dropdown position-absolute top-0 end-0 m-2">
-                                        <button class="btn btn-light rounded-0 border dropdown-toggle p-1" type="button" id="menu-4" data-bs-toggle="dropdown" aria-expanded="false" aria-label="menu"></button>
-                                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="menu-4">
-                                            <li><a class="dropdown-item" href="#"><img src="Pictures/play.png" style="width: 16px; height: 16px; margin-right: 8px;">Iniciar Curso</a></li>
-                                            <li><a class="dropdown-item" href="#"><img src="Pictures/heart.png" style="width: 16px; height: 16px; margin-right: 8px;">Favorito</a></li>
-                                            <li><a class="dropdown-item" href="#"><img src="Pictures/blind.png" style="width: 16px; height: 16px; margin-right: 8px;">No Mostrar Más</a></li>
-                                            <li><a class="dropdown-item" href="#"><img src="Pictures/share.png" style="width: 16px; height: 16px; margin-right: 8px;">Compartir</a></li>
-                                        </ul>
-                                    </div>
-                                </div>
-                                <div class="card-body py-2">
-                                    <h6 class="card-title mb-1">Python para Análisis de Datos</h6>
-                                    <p class="text-muted small mb-2">Profesor: Jorge Nitales</p>
-                                </div>
-                                <div class="card-footer bg-transparent border-0 pb-3 pt-0">
-                                    <div class="dropdown">
-                                        <a class="small dropdown-toggle" href="#" role="button" id="dropdown-course-4" data-bs-toggle="dropdown" aria-expanded="false">Detalles</a>
-                                        <ul class="dropdown-menu" aria-labelledby="dropdown-course-4">
-                                            <li><a class="dropdown-item">1. Introducción a Python</a></li>
-                                            <li><a class="dropdown-item">2. Numpy y Pandas</a></li>
-                                            <li><a class="dropdown-item">3. Limpieza de datos</a></li>
-                                            <li><a class="dropdown-item">4. Visualización (Matplotlib/Seaborn)</a></li>
-                                            <li><a class="dropdown-item">5. Modelado básico</a></li>
-                                            <li><a class="dropdown-item">6. Proyecto final</a></li>
-                                        </ul>
-                                    </div>
-                                </div>
+                            <div class="col-12 text-center text-muted" data-placeholder="otros-cursos">
+                                Buscando cursos disponibles...
                             </div>
                         </div>
-
-                        <!-- Ethical Hacking -->
-                        <div class="col">
-                            <div class="card h-100 shadow-sm">
-                                <div class="position-relative">
-                                    <img src="Pictures/ai.png" class="card-img-top" alt="Ethical Hacking course">
-                                    <div class="dropdown position-absolute top-0 end-0 m-2">
-                                        <button class="btn btn-light rounded-0 border dropdown-toggle p-1" type="button" id="menu-5" data-bs-toggle="dropdown" aria-expanded="false" aria-label="menu"></button>
-                                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="menu-5">
-                                            <li><a class="dropdown-item" href="#"><img src="Pictures/play.png" style="width: 16px; height: 16px; margin-right: 8px;">Iniciar Curso</a></li>
-                                            <li><a class="dropdown-item" href="#"><img src="Pictures/heart.png" style="width: 16px; height: 16px; margin-right: 8px;">Favorito</a></li>
-                                            <li><a class="dropdown-item" href="#"><img src="Pictures/blind.png" style="width: 16px; height: 16px; margin-right: 8px;">No Mostrar Más</a></li>
-                                            <li><a class="dropdown-item" href="#"><img src="Pictures/share.png" style="width: 16px; height: 16px; margin-right: 8px;">Compartir</a></li>
-                                        </ul>
-                                    </div>
-                                </div>
-                                <div class="card-body py-2">
-                                    <h6 class="card-title mb-1">IA y Machine Learning</h6>
-                                    <p class="text-muted small mb-2">Profesor: Rosamel Fierro</p>
-                                </div>
-                                <div class="card-footer bg-transparent border-0 pb-3 pt-0">
-                                    <div class="dropdown">
-                                        <a class="small dropdown-toggle" href="#" role="button" id="dropdown-course-5" data-bs-toggle="dropdown" aria-expanded="false">Detalles</a>
-                                        <ul class="dropdown-menu" aria-labelledby="dropdown-course-5">
-                                            <li><a class="dropdown-item">1. Introducción al ML</a></li>
-                                            <li><a class="dropdown-item">2. Regresión</a></li>
-                                            <li><a class="dropdown-item">3. Clasificación</a></li>
-                                            <li><a class="dropdown-item">4. Redes Neuronales</a></li>
-                                            <li><a class="dropdown-item">5. Evaluación y ajuste</a></li>
-                                            <li><a class="dropdown-item">6. Implementación y despliegue</a></li>
-                                        </ul>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Pen Testing -->
-                        <div class="col">
-                            <div class="card h-100 shadow-sm">
-                                <div class="position-relative">
-                                    <img src="Pictures/data-science.jpg" class="card-img-top" alt="Pen Testing course">
-                                    <div class="dropdown position-absolute top-0 end-0 m-2">
-                                        <button class="btn btn-light rounded-0 border dropdown-toggle p-1" type="button" id="menu-6" data-bs-toggle="dropdown" aria-expanded="false" aria-label="menu"></button>
-                                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="menu-6">
-                                            <li><a class="dropdown-item" href="#"><img src="Pictures/play.png" style="width: 16px; height: 16px; margin-right: 8px;">Iniciar Curso</a></li>
-                                            <li><a class="dropdown-item" href="#"><img src="Pictures/heart.png" style="width: 16px; height: 16px; margin-right: 8px;">Favorito</a></li>
-                                            <li><a class="dropdown-item" href="#"><img src="Pictures/blind.png" style="width: 16px; height: 16px; margin-right: 8px;">No Mostrar Más</a></li>
-                                            <li><a class="dropdown-item" href="#"><img src="Pictures/share.png" style="width: 16px; height: 16px; margin-right: 8px;">Compartir</a></li>
-                                        </ul>
-                                    </div>
-                                </div>
-                                <div class="card-body py-2">
-                                    <h6 class="card-title mb-1">Ciencia de Datos</h6>
-                                    <p class="text-muted small mb-2">Profesor: Soila Cerda</p>
-                                </div>
-                                <div class="card-footer bg-transparent border-0 pb-3 pt-0">
-                                    <div class="dropdown">
-                                        <a class="small dropdown-toggle" href="#" role="button" id="dropdown-course-6" data-bs-toggle="dropdown" aria-expanded="false">Detalles</a>
-                                        <ul class="dropdown-menu" aria-labelledby="dropdown-course-6">
-                                            <li><a class="dropdown-item">1. Fundamentos de Ciencia de Datos</a></li>
-                                            <li><a class="dropdown-item">2. Estadística para datos</a></li>
-                                            <li><a class="dropdown-item">3. Machine Learning</a></li>
-                                            <li><a class="dropdown-item">4. Big Data y herramientas</a></li>
-                                            <li><a class="dropdown-item">5. Visualización y comunicación</a></li>
-                                            <li><a class="dropdown-item">6. Proyecto final</a></li>
-                                        </ul>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    </div>
+                    </section>
                 </div>
-
-                <!-- Dashboard content -->
-                
             </main>
         </div>
     </div>

@@ -1,7 +1,12 @@
 // scripts/inscripciones.js
 // Manejo de inscripciones a cursos
 
-const API_BASE_URL = 'http://localhost:3000/api';
+// Variable global compartida para la URL base de la API
+if (typeof window.API_BASE_URL === 'undefined') {
+  window.API_BASE_URL = 'http://localhost:3000/api';
+}
+// Usar directamente window.API_BASE_URL o crear alias local sin const
+var API_BASE_URL = window.API_BASE_URL;
 
 // Inscribirse a un curso
 async function inscribirseACurso(cursoId) {
@@ -14,6 +19,12 @@ async function inscribirseACurso(cursoId) {
     const data = await response.json();
 
     if (response.ok && data.success) {
+      window.dispatchEvent(new CustomEvent('inscripcion:cambio', {
+        detail: {
+          tipo: 'nueva',
+          inscripcion: data.inscripcion
+        }
+      }));
       return { success: true, inscripcion: data.inscripcion, message: data.message };
     } else {
       return { success: false, error: data.error || 'Error al inscribirse' };
@@ -61,18 +72,37 @@ async function obtenerInscripciones() {
 }
 
 // Actualizar progreso de lección
-async function actualizarProgreso(cursoId, leccionId, completado, progreso) {
+async function actualizarProgreso(cursoId, leccionId, datos = {}) {
   try {
+    const payload = {};
+
+    if (datos.completado !== undefined) payload.completado = datos.completado;
+    if (datos.progreso !== undefined) payload.progreso = datos.progreso;
+    if (datos.videoCompletado !== undefined) payload.videoCompletado = datos.videoCompletado;
+
     const response = await fetch(`${API_BASE_URL}/inscripciones/${cursoId}/progreso/${leccionId}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json'
       },
       credentials: 'include',
-      body: JSON.stringify({ completado, progreso })
+      body: JSON.stringify(payload)
     });
 
     const data = await response.json();
+    if (data.success) {
+      window.dispatchEvent(new CustomEvent('inscripcion:cambio', {
+        detail: {
+          tipo: 'progreso',
+          cursoId,
+          leccionId,
+          completado: datos.completado,
+          progreso: datos.progreso,
+          videoCompletado: datos.videoCompletado,
+          inscripcion: data.inscripcion || null
+        }
+      }));
+    }
     return data.success;
   } catch (error) {
     console.error('Error al actualizar progreso:', error);

@@ -412,31 +412,220 @@ async function seedDatabase() {
     ];
 
     // Función para agregar contenido lorem ipsum a lecciones
+    const generarContenidoLeccion = (curso, seccion, leccion) => {
+      const cursoTitulo = curso.titulo;
+      const seccionTitulo = seccion.titulo;
+      const leccionTitulo = leccion.titulo;
+      const resumen = (leccion.descripcion || `Profundización en ${leccionTitulo.toLowerCase()} dentro de la sección ${seccionTitulo.toLowerCase()}`).replace(/\.$/, '');
+
+      const accionVerbo = leccionTitulo.toLowerCase().startsWith('¿')
+        ? `responder a la pregunta "${leccionTitulo}" con enfoque práctico`
+        : `comprender y aplicar ${leccionTitulo.toLowerCase()}`;
+
+      return `
+        <h4>${leccionTitulo}</h4>
+        <p>${resumen}. Esta sesión forma parte de la sección <strong>"${seccionTitulo}"</strong> del curso <strong>"${cursoTitulo}"</strong>, por lo que conecta directamente con los objetivos globales del programa.</p>
+        <h5>Contexto profesional</h5>
+        <p>Analizamos cómo ${leccionTitulo.toLowerCase()} impacta el trabajo diario en ${cursoTitulo.toLowerCase()}, utilizando ejemplos reales y métricas que permiten evaluar la efectividad de las decisiones técnicas.</p>
+        <h5>En esta lección lograrás</h5>
+        <ul>
+          <li>${accionVerbo} en escenarios reales.</li>
+          <li>Identificar riesgos y oportunidades relacionados con ${leccionTitulo.toLowerCase()}.</li>
+          <li>Documentar hallazgos y traducirlos en acciones concretas para tu equipo.</li>
+        </ul>
+        <h5>Recomendaciones</h5>
+        <p>Toma notas mientras avanzas y contrasta cada concepto con los casos de tu organización. Si la lección incluye recursos descargables o código fuente, practícalos al finalizar para consolidar el aprendizaje.</p>
+      `;
+    };
+
+    const SAMPLE_VIDEOS = [
+      'https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+      'https://storage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4',
+      'https://storage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4',
+      'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4',
+      'https://storage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4'
+    ];
+
+    const obtenerVideoDemostrativo = (indice) => SAMPLE_VIDEOS[indice % SAMPLE_VIDEOS.length];
+
     const agregarContenidoALecciones = (curso) => {
-      curso.secciones.forEach(seccion => {
-        if (seccion.lecciones) {
-          seccion.lecciones.forEach(leccion => {
-            if (!leccion.contenido) {
-              leccion.contenido = `
-                <h4>${leccion.titulo}</h4>
-                <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</p>
-                <h5>Conceptos Clave</h5>
-                <ul>
-                  <li>Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.</li>
-                  <li>Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.</li>
-                  <li>Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium.</li>
-                </ul>
-                <h5>Ejemplos Prácticos</h5>
-                <p>At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium voluptatum deleniti atque corrupti quos dolores et quas molestias excepturi sint occaecati cupiditate non provident.</p>
-                <p>Similique sunt in culpa qui officia deserunt mollitia animi, id est laborum et dolorum fuga. Et harum quidem rerum facilis est et expedita distinctio.</p>
-              `;
-            }
-            if (!leccion.descripcion) {
-              leccion.descripcion = `Contenido sobre ${leccion.titulo.toLowerCase()}`;
-            }
-          });
-        }
+      const secciones = Array.isArray(curso.secciones) ? curso.secciones : [];
+
+      secciones.forEach(seccion => {
+        const lecciones = Array.isArray(seccion.lecciones) ? seccion.lecciones : [];
+
+        lecciones.forEach(leccion => {
+          if (!leccion.contenido || typeof leccion.contenido !== 'string' || leccion.contenido.trim().length === 0) {
+            leccion.contenido = generarContenidoLeccion(curso, seccion, leccion);
+          }
+
+          if (!leccion.descripcion || leccion.descripcion.trim().length === 0) {
+            leccion.descripcion = `Aplicación práctica de ${leccion.titulo.toLowerCase()} dentro de la sección ${seccion.titulo.toLowerCase()}.`;
+          }
+        });
       });
+    };
+
+    const asegurarVideosEnLecciones = (curso) => {
+      let contador = 0;
+      const secciones = Array.isArray(curso.secciones) ? curso.secciones : [];
+
+      secciones.forEach(seccion => {
+        const lecciones = Array.isArray(seccion.lecciones) ? seccion.lecciones : [];
+        lecciones.forEach(leccion => {
+          if (!leccion) return;
+
+          leccion.tipo = 'video';
+          if (!leccion.urlVideo || typeof leccion.urlVideo !== 'string' || leccion.urlVideo.trim().length === 0) {
+            leccion.urlVideo = obtenerVideoDemostrativo(contador++);
+          }
+        });
+      });
+    };
+
+    const DISTRACTORES_GENERICOS = [
+      'Contenido administrativo sin relación técnica',
+      'Conceptos de otra carrera',
+      'Material introductorio externo al curso',
+      'Procedimientos operativos generales',
+      'Requisitos administrativos del campus',
+      'Recursos externos no incluidos en la malla',
+      'Actividades extraprogramáticas',
+      'Temas de evaluación institucional'
+    ];
+
+    const obtenerDistractoresGenericos = (count, offset = 0) => {
+      const resultado = [];
+      let cursor = offset;
+      while (resultado.length < count) {
+        const base = DISTRACTORES_GENERICOS[cursor % DISTRACTORES_GENERICOS.length];
+        const variante = cursor >= DISTRACTORES_GENERICOS.length ? ` (variante ${cursor - DISTRACTORES_GENERICOS.length + 1})` : '';
+        const texto = `${base}${variante}`;
+        if (!resultado.includes(texto)) {
+          resultado.push(texto);
+        }
+        cursor++;
+      }
+      return resultado;
+    };
+
+    const crearPreguntaSeleccionMultiple = (enunciado, respuestaCorrecta, distractores, orden, puntos = 2) => {
+      const distractoresNormalizados = Array.from(new Set(
+        (distractores || [])
+          .map(opcion => opcion && opcion.toString().trim())
+          .filter(opcion => opcion && opcion !== respuestaCorrecta)
+      ));
+
+      while (distractoresNormalizados.length < 3) {
+        const faltantes = obtenerDistractoresGenericos(1, orden + distractoresNormalizados.length);
+        faltantes.forEach(texto => {
+          if (distractoresNormalizados.length < 3 && !distractoresNormalizados.includes(texto) && texto !== respuestaCorrecta) {
+            distractoresNormalizados.push(texto);
+          }
+        });
+      }
+
+      return {
+        pregunta: enunciado,
+        tipo: 'opcion_multiple',
+        puntos,
+        orden,
+        opciones: [
+          { texto: respuestaCorrecta, esCorrecta: true },
+          ...distractoresNormalizados.slice(0, 3).map(texto => ({ texto, esCorrecta: false }))
+        ]
+      };
+    };
+
+    const generarPreguntasSeccion = (curso, seccion, indiceSeccion) => {
+      const offset = indiceSeccion * 5;
+      const lecciones = seccion.lecciones || [];
+      const leccionDestacada = lecciones[0]?.titulo || seccion.titulo;
+      const segundaLeccion = lecciones[1]?.titulo || `${seccion.titulo} aplicada`;
+
+      return [
+        crearPreguntaSeleccionMultiple(
+          `¿Cuál es el objetivo principal de la sección "${seccion.titulo}"?`,
+          `Comprender y aplicar conceptos de ${seccion.titulo.toLowerCase()}.`,
+          obtenerDistractoresGenericos(3, offset),
+          1,
+          2
+        ),
+        crearPreguntaSeleccionMultiple(
+          `¿Qué recurso destaca en la sección "${seccion.titulo}"?`,
+          `La lección "${leccionDestacada}" como base de estudio.`,
+          [
+            `Material administrativo sin vínculo con ${seccion.titulo.toLowerCase()}.`,
+            `Un repaso general de otra asignatura.`,
+            `Documentación ajena al curso "${curso.titulo}".`
+          ],
+          2,
+          2
+        ),
+        crearPreguntaSeleccionMultiple(
+          `Para reforzar la sección "${seccion.titulo}", ¿qué acción es recomendable?`,
+          `Practicar los contenidos trabajados en "${segundaLeccion}".`,
+          obtenerDistractoresGenericos(3, offset + 2),
+          3,
+          2
+        )
+      ];
+    };
+
+    const generarPreguntasFinal = (curso) => {
+      const temas = [];
+      (curso.secciones || []).forEach(seccion => {
+        (seccion.lecciones || []).forEach(leccion => {
+          temas.push({
+            seccionTitulo: seccion.titulo,
+            leccionTitulo: leccion.titulo
+          });
+        });
+      });
+
+      if (temas.length === 0) {
+        temas.push({
+          seccionTitulo: curso.titulo,
+          leccionTitulo: `Fundamentos de ${curso.titulo}`
+        });
+      }
+
+      const titulosDisponibles = Array.from(new Set(temas.map(t => t.leccionTitulo).filter(Boolean)));
+
+      const obtenerDistractoresDeTemas = (respuesta, indice) => {
+        const candidatos = titulosDisponibles.filter(titulo => titulo && titulo !== respuesta);
+        const resultado = [];
+        let cursor = indice;
+
+        while (resultado.length < 3 && candidatos.length > 0) {
+          const candidato = candidatos[cursor % candidatos.length];
+          if (candidato && !resultado.includes(candidato)) {
+            resultado.push(candidato);
+          }
+          cursor++;
+          if (cursor > indice + candidatos.length * 2) {
+            break;
+          }
+        }
+
+        if (resultado.length < 3) {
+          resultado.push(...obtenerDistractoresGenericos(3 - resultado.length, indice));
+        }
+
+        return resultado;
+      };
+
+      const preguntas = [];
+      for (let i = 0; i < 15; i++) {
+        const tema = temas[i % temas.length];
+        const respuesta = tema.leccionTitulo || `Fundamentos de ${tema.seccionTitulo}`;
+        const enunciado = `En el curso "${curso.titulo}", ¿qué tema corresponde a la sección "${tema.seccionTitulo}"?`;
+        const distractores = obtenerDistractoresDeTemas(respuesta, i);
+
+        preguntas.push(crearPreguntaSeleccionMultiple(enunciado, respuesta, distractores, i + 1, 2));
+      }
+
+      return preguntas;
     };
 
     // Insertar cursos
@@ -444,6 +633,7 @@ async function seedDatabase() {
     for (const cursoData of cursosIniciales) {
       // Agregar contenido a todas las lecciones
       agregarContenidoALecciones(cursoData);
+      asegurarVideosEnLecciones(cursoData);
       
       const curso = await Curso.create(cursoData);
       console.log(`✅ Curso creado: ${curso.titulo}`);
@@ -463,7 +653,8 @@ async function seedDatabase() {
     for (const curso of cursosCreados) {
       const secciones = curso.secciones || [];
       
-      for (const seccion of secciones) {
+      for (let indiceSeccion = 0; indiceSeccion < secciones.length; indiceSeccion++) {
+        const seccion = secciones[indiceSeccion];
         if (seccion.tieneExamen) {
           const examen = await Examen.create({
             curso: curso._id,
@@ -474,37 +665,7 @@ async function seedDatabase() {
             tiempoLimite: 30, // 30 minutos
             intentosPermitidos: 3,
             porcentajeAprobacion: 70,
-            preguntas: [
-              {
-                pregunta: `¿Cuál es el concepto principal de "${seccion.titulo}"?`,
-                tipo: 'opcion_multiple',
-                puntos: 2,
-                orden: 1,
-                opciones: [
-                  { texto: 'Opción A: Concepto correcto', esCorrecta: true },
-                  { texto: 'Opción B: Concepto incorrecto', esCorrecta: false },
-                  { texto: 'Opción C: Concepto alternativo', esCorrecta: false },
-                  { texto: 'Opción D: Ninguna de las anteriores', esCorrecta: false }
-                ]
-              },
-              {
-                pregunta: `¿El contenido de "${seccion.titulo}" es fundamental para este curso?`,
-                tipo: 'verdadero_falso',
-                puntos: 1,
-                orden: 2,
-                opciones: [
-                  { texto: 'Verdadero', esCorrecta: true },
-                  { texto: 'Falso', esCorrecta: false }
-                ]
-              },
-              {
-                pregunta: `Explica brevemente los puntos clave de "${seccion.titulo}"`,
-                tipo: 'texto',
-                puntos: 3,
-                orden: 3,
-                opciones: []
-              }
-            ]
+            preguntas: generarPreguntasSeccion(curso, seccion, indiceSeccion)
           });
           totalExamenes++;
           console.log(`✅ Examen creado: ${examen.titulo}`);
@@ -522,37 +683,7 @@ async function seedDatabase() {
           tiempoLimite: 60, // 60 minutos
           intentosPermitidos: 2,
           porcentajeAprobacion: 75,
-          preguntas: [
-            {
-              pregunta: `¿Cuál es el objetivo principal del curso "${curso.titulo}"?`,
-              tipo: 'opcion_multiple',
-              puntos: 3,
-              orden: 1,
-              opciones: [
-                { texto: 'Aprender los fundamentos básicos', esCorrecta: true },
-                { texto: 'Dominar técnicas avanzadas solamente', esCorrecta: false },
-                { texto: 'Solo teoría sin práctica', esCorrecta: false },
-                { texto: 'Ninguna de las anteriores', esCorrecta: false }
-              ]
-            },
-            {
-              pregunta: `¿Has completado todas las secciones del curso "${curso.titulo}"?`,
-              tipo: 'verdadero_falso',
-              puntos: 2,
-              orden: 2,
-              opciones: [
-                { texto: 'Verdadero', esCorrecta: true },
-                { texto: 'Falso', esCorrecta: false }
-              ]
-            },
-            {
-              pregunta: `Describe qué has aprendido en el curso "${curso.titulo}"`,
-              tipo: 'texto',
-              puntos: 5,
-              orden: 3,
-              opciones: []
-            }
-          ]
+          preguntas: generarPreguntasFinal(curso)
         });
         totalExamenes++;
         console.log(`✅ Examen final creado: ${examenFinal.titulo}`);
@@ -655,6 +786,32 @@ async function seedDatabase() {
 
           inscripcion.calcularProgreso();
           await inscripcion.save();
+
+          const usuarioSeed = await Usuario.findById(estudiante._id);
+          if (usuarioSeed) {
+            if (!usuarioSeed.cursosInscritos.some(c => c.toString() === curso._id.toString())) {
+              usuarioSeed.cursosInscritos.push(curso._id);
+            }
+
+            const progresoExistente = usuarioSeed.progresoCursos.find(p => p.curso && p.curso.toString() === curso._id.toString());
+            if (progresoExistente) {
+              progresoExistente.progreso = inscripcion.progresoGeneral;
+              progresoExistente.actualizadoEn = new Date();
+            } else {
+              usuarioSeed.progresoCursos.push({
+                curso: curso._id,
+                progreso: inscripcion.progresoGeneral,
+                actualizadoEn: new Date()
+              });
+            }
+
+            await usuarioSeed.save();
+          }
+
+          await Curso.findByIdAndUpdate(
+            curso._id,
+            { $inc: { estudiantesInscritos: 1 } }
+          );
           console.log(`✅ Inscrito a: ${curso.titulo} (${inscripcion.progresoGeneral}% completo)`);
         }
       }
@@ -686,7 +843,22 @@ async function seedDatabase() {
         });
 
         if (!notifExistente) {
-          await Notificacion.create(notifData);
+          const notificacion = await Notificacion.create(notifData);
+          await Usuario.findByIdAndUpdate(
+            notifData.usuario,
+            {
+              $push: {
+                notificacionesNoLeidas: {
+                  notificacion: notificacion._id,
+                  titulo: notificacion.titulo,
+                  mensaje: notificacion.mensaje,
+                  tipo: notificacion.tipo,
+                  link: notificacion.link,
+                  fecha: notificacion.fechaCreacion
+                }
+              }
+            }
+          );
           console.log(`✅ Notificación creada: ${notifData.titulo}`);
         }
       }

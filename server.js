@@ -9,11 +9,16 @@ require('dotenv').config();
 // Importar configuración de base de datos
 const connectDB = require('./config/database');
 
+// Modelos
+const Notificacion = require('./models/Notificacion');
+const Usuario = require('./models/Usuario');
+
 // Importar rutas
 const cursosRoutes = require('./routes/cursos');
 const authRoutes = require('./routes/auth');
 const inscripcionesRoutes = require('./routes/inscripciones');
 const notificacionesRoutes = require('./routes/notificaciones');
+const mediaRoutes = require('./routes/media');
 
 const app = express();
 
@@ -44,7 +49,18 @@ app.use(session({
   rolling: true // Renovar la cookie en cada request
 }));
 
-// 🟢 Servir archivos estáticos (HTML, CSS, JS)
+// 🔌 Conectar a MongoDB
+connectDB();
+
+// 📡 Rutas API - DEBEN estar ANTES de las rutas estáticas
+app.use('/api/cursos', cursosRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/inscripciones', inscripcionesRoutes);
+app.use('/api/notificaciones', notificacionesRoutes);
+app.use('/api/media', mediaRoutes);
+app.use('/api/examenes', require('./routes/examenes'));
+
+// 🟢 Servir archivos estáticos (HTML, CSS, JS) - DESPUÉS de las rutas API
 app.use(express.static(path.join(__dirname)));
 
 // 🟢 Servir archivos subidos (videos, audios, imágenes)
@@ -57,16 +73,6 @@ app.get('/', (req, res) => {
   }
   res.redirect('/index.html');
 });
-
-// 🔌 Conectar a MongoDB
-connectDB();
-
-// 📡 Rutas API
-app.use('/api/cursos', cursosRoutes);
-app.use('/api/auth', authRoutes);
-app.use('/api/inscripciones', inscripcionesRoutes);
-app.use('/api/notificaciones', notificacionesRoutes);
-app.use('/api/examenes', require('./routes/examenes'));
 
 // 🧠 Crear servidor HTTP y conectar con Socket.IO
 const server = http.createServer(app);
@@ -87,14 +93,29 @@ io.on('connection', async (socket) => {
     // Guardar notificación en BD si hay usuario
     if (data.usuarioId) {
       try {
-        const Notificacion = require('./models/Notificacion');
-        await Notificacion.create({
+        const notificacion = await Notificacion.create({
           usuario: data.usuarioId,
           titulo: 'Diploma emitido',
           mensaje: data.mensaje || 'Diploma disponible para descarga',
           tipo: 'diploma',
           link: data.link || '/profile.html'
         });
+
+        await Usuario.findByIdAndUpdate(
+          data.usuarioId,
+          {
+            $push: {
+              notificacionesNoLeidas: {
+                notificacion: notificacion._id,
+                titulo: notificacion.titulo,
+                mensaje: notificacion.mensaje,
+                tipo: notificacion.tipo,
+                link: notificacion.link,
+                fecha: notificacion.fechaCreacion
+              }
+            }
+          }
+        );
       } catch (error) {
         console.error('Error al guardar notificación:', error);
       }
@@ -109,7 +130,6 @@ io.on('connection', async (socket) => {
     // Si hay usuarios especificados, crear notificaciones para ellos
     if (data.usuariosIds && Array.isArray(data.usuariosIds)) {
       try {
-        const Notificacion = require('./models/Notificacion');
         const notificaciones = data.usuariosIds.map(usuarioId => ({
           usuario: usuarioId,
           titulo: 'Nuevo curso disponible',
@@ -117,7 +137,27 @@ io.on('connection', async (socket) => {
           tipo: 'curso',
           link: data.link || `/curso.html?id=${data.cursoId}`
         }));
-        await Notificacion.insertMany(notificaciones);
+        const docs = await Notificacion.insertMany(notificaciones);
+
+        await Promise.all(
+          docs.map(notificacion =>
+            Usuario.findByIdAndUpdate(
+              notificacion.usuario,
+              {
+                $push: {
+                  notificacionesNoLeidas: {
+                    notificacion: notificacion._id,
+                    titulo: notificacion.titulo,
+                    mensaje: notificacion.mensaje,
+                    tipo: notificacion.tipo,
+                    link: notificacion.link,
+                    fecha: notificacion.fechaCreacion
+                  }
+                }
+              }
+            )
+          )
+        );
       } catch (error) {
         console.error('Error al guardar notificaciones:', error);
       }

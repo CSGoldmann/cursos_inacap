@@ -1,7 +1,12 @@
 // scripts/auth.js
 // Manejo de autenticación
 
-const API_BASE_URL = 'http://localhost:3000/api';
+// Variable global compartida para la URL base de la API
+if (typeof window.API_BASE_URL === 'undefined') {
+  window.API_BASE_URL = 'http://localhost:3000/api';
+}
+// Usar directamente window.API_BASE_URL o crear alias local sin const
+var API_BASE_URL = window.API_BASE_URL;
 
 // Estado del usuario
 let usuarioActual = null;
@@ -9,7 +14,10 @@ let usuarioActual = null;
 // Inicializar autenticación
 async function initAuth() {
   try {
-    const response = await fetch(`${API_BASE_URL}/auth/me`, {
+    const url = `${API_BASE_URL}/auth/me`;
+    console.log('🔍 Intentando verificar autenticación en:', url);
+    
+    const response = await fetch(url, {
       method: 'GET',
       credentials: 'include',
       headers: {
@@ -18,6 +26,13 @@ async function initAuth() {
     });
 
     console.log('🔍 Auth check response status:', response.status);
+    console.log('🔍 Auth check response URL:', response.url);
+    
+    if (response.status === 404) {
+      console.error('❌ 404 - La ruta de la API no existe. Verifica que el servidor esté corriendo y las rutas estén configuradas.');
+      usuarioActual = null;
+      return false;
+    }
     
     if (response.ok) {
       const data = await response.json();
@@ -35,7 +50,9 @@ async function initAuth() {
     usuarioActual = null;
     return false;
   } catch (error) {
-    console.error('Error al verificar autenticación:', error);
+    console.error('❌ Error al verificar autenticación:', error);
+    console.error('   URL intentada:', `${API_BASE_URL}/auth/me`);
+    console.error('   Asegúrate de que el servidor esté corriendo en http://localhost:3000');
     usuarioActual = null;
     return false;
   }

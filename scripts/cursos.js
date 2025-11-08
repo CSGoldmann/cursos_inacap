@@ -29,19 +29,82 @@ async function cargarCursos() {
 
 let inscripcionesCargadas = [];
 
-// Renderizar cursos en el dashboard
-function renderizarCursos() {
-  const cursosActivosContainer = document.getElementById('cursos-activos-container');
-  const otrosCursosContainer = document.getElementById('otros-cursos-container');
+function obtenerCursoId(curso) {
+  if (!curso) return null;
+  if (typeof curso === 'string') return curso;
+  if (curso._id) return curso._id.toString();
+  if (curso.id) return curso.id.toString();
+  if (typeof curso.toString === 'function') return curso.toString();
+  return null;
+}
 
-  if (!cursosActivosContainer || !otrosCursosContainer) {
-    // Si no existen los contenedores, crearlos
-    crearContenedores();
+function actualizarInscripcionLocal(inscripcion) {
+  if (!inscripcion) return;
+  const cursoId = obtenerCursoId(inscripcion.curso);
+  if (!cursoId) return;
+
+  const indice = inscripcionesCargadas.findIndex(i => obtenerCursoId(i.curso) === cursoId);
+  if (indice >= 0) {
+    inscripcionesCargadas[indice] = {
+      ...inscripcionesCargadas[indice],
+      ...inscripcion,
+      curso: inscripcion.curso || inscripcionesCargadas[indice].curso,
+      progresoGeneral: inscripcion.progresoGeneral ?? inscripcionesCargadas[indice].progresoGeneral
+    };
+  } else {
+    inscripcionesCargadas.push(inscripcion);
+  }
+}
+
+async function recargarInscripciones(desdeDetalle = null) {
+  if (!window.inscripcionesAPI || typeof window.inscripcionesAPI.obtenerInscripciones !== 'function') {
     return;
   }
 
-  // Si no hay cursos cargados, mantener los estáticos
-  if (!cursosCargados || cursosCargados.length === 0) {
+  if (desdeDetalle && desdeDetalle.inscripcion) {
+    actualizarInscripcionLocal(desdeDetalle.inscripcion);
+    renderizarCursos();
+    return;
+  }
+
+  const nuevasInscripciones = await window.inscripcionesAPI.obtenerInscripciones();
+  inscripcionesCargadas = Array.isArray(nuevasInscripciones) ? nuevasInscripciones : [];
+  renderizarCursos();
+}
+
+// Renderizar cursos en el dashboard
+function renderizarCursos() {
+  let cursosActivosContainer = document.getElementById('cursos-activos-container');
+  let otrosCursosContainer = document.getElementById('otros-cursos-container');
+
+  if (!cursosActivosContainer || !otrosCursosContainer) {
+    crearContenedores();
+    cursosActivosContainer = document.getElementById('cursos-activos-container');
+    otrosCursosContainer = document.getElementById('otros-cursos-container');
+  }
+
+  if (!cursosActivosContainer || !otrosCursosContainer) {
+    console.warn('No se encontraron contenedores para renderizar cursos.');
+    return;
+  }
+
+  const hayCursos = Array.isArray(cursosCargados) && cursosCargados.length > 0;
+
+  if (!hayCursos) {
+    cursosActivosContainer.innerHTML = `
+      <div class="col-12">
+        <div class="alert alert-info text-center mb-0">
+          Aún no hay cursos disponibles. Vuelve más tarde o contacta a un administrador.
+        </div>
+      </div>
+    `;
+    otrosCursosContainer.innerHTML = `
+      <div class="col-12">
+        <div class="alert alert-secondary text-center mb-0">
+          Sin cursos publicados por el momento.
+        </div>
+      </div>
+    `;
     return;
   }
 
@@ -66,28 +129,20 @@ function renderizarCursos() {
   });
 
   // Reemplazar contenido de contenedores
-  if (cursosActivosContainer) {
-    if (cursosActivos.length > 0) {
-      cursosActivosContainer.innerHTML = cursosActivos.map(curso => {
+  cursosActivosContainer.innerHTML = cursosActivos.length > 0
+    ? cursosActivos.map(curso => {
         const inscripcion = inscripcionesCargadas.find(i => {
           const cursoId = i.curso._id || i.curso;
           const cursoActualId = curso._id || curso.id;
           return cursoId && cursoActualId && cursoId.toString() === cursoActualId.toString();
         });
         return crearTarjetaCurso(curso, true, inscripcion);
-      }).join('');
-    } else {
-      cursosActivosContainer.innerHTML = '<div class="col-12"><p class="text-center text-muted">No tienes cursos inscritos aún. ¡Inscríbete a uno de los cursos disponibles!</p></div>';
-    }
-  }
+      }).join('')
+    : '<div class="col-12"><p class="text-center text-muted">No tienes cursos inscritos aún. ¡Inscríbete a uno de los cursos disponibles!</p></div>';
 
-  if (otrosCursosContainer) {
-    if (cursosOtros.length > 0) {
-      otrosCursosContainer.innerHTML = cursosOtros.map(curso => crearTarjetaCurso(curso, false)).join('');
-    } else {
-      otrosCursosContainer.innerHTML = '<div class="col-12"><p class="text-center text-muted">No hay más cursos disponibles.</p></div>';
-    }
-  }
+  otrosCursosContainer.innerHTML = cursosOtros.length > 0
+    ? cursosOtros.map(curso => crearTarjetaCurso(curso, false)).join('')
+    : '<div class="col-12"><p class="text-center text-muted">No hay más cursos disponibles.</p></div>';
 }
 
 // Crear contenedores si no existen
@@ -272,4 +327,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 // Exportar funciones globales
 window.cargarCursos = cargarCursos;
 window.renderizarCursos = renderizarCursos;
+
+window.addEventListener('inscripcion:cambio', async (event) => {
+  const detalle = event.detail || {};
+  if (detalle.inscripcion) {
+    actualizarInscripcionLocal(detalle.inscripcion);
+    renderizarCursos();
+  } else {
+    await recargarInscripciones(detalle);
+  }
+});
 

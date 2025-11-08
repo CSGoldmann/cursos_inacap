@@ -1,7 +1,12 @@
 // scripts/notificaciones-api.js
 // API para notificaciones desde base de datos
 
-const API_BASE_URL = 'http://localhost:3000/api';
+// Variable global compartida para la URL base de la API
+if (typeof window.API_BASE_URL === 'undefined') {
+  window.API_BASE_URL = 'http://localhost:3000/api';
+}
+// Usar directamente window.API_BASE_URL o crear alias local sin const
+var API_BASE_URL = window.API_BASE_URL;
 
 // Obtener notificaciones
 async function obtenerNotificaciones(leidas = null) {
@@ -17,12 +22,16 @@ async function obtenerNotificaciones(leidas = null) {
 
     if (response.ok) {
       const data = await response.json();
-      return data;
+      return {
+        notificaciones: data.notificaciones || [],
+        noLeidas: data.noLeidas || 0,
+        pendientes: data.pendientes || []
+      };
     }
-    return { notificaciones: [], noLeidas: 0 };
+    return { notificaciones: [], noLeidas: 0, pendientes: [] };
   } catch (error) {
     console.error('Error al obtener notificaciones:', error);
-    return { notificaciones: [], noLeidas: 0 };
+    return { notificaciones: [], noLeidas: 0, pendientes: [] };
   }
 }
 
@@ -81,22 +90,30 @@ async function cargarNotificaciones() {
 
   list.innerHTML = "";
 
-  if (data.notificaciones.length === 0) {
+  const pendientes = Array.isArray(data.pendientes) ? data.pendientes : [];
+  const origen = pendientes.length > 0 ? pendientes : data.notificaciones;
+
+  if (!origen || origen.length === 0) {
     list.innerHTML = '<div class="px-3 py-3 text-center text-secondary small">No hay notificaciones</div>';
     countEl.classList.add("d-none");
     return;
   }
 
-  data.notificaciones.forEach((n) => {
+  origen.forEach((n) => {
     const li = document.createElement("li");
     li.className = `notification-item px-3 py-2 border-bottom small ${n.leida ? '' : 'fw-bold'}`;
-    
-    const fecha = new Date(n.fechaCreacion).toLocaleString('es-ES');
+    const id = n.notificacion || n._id;
+    const fecha = new Date(n.fecha || n.fechaCreacion || Date.now()).toLocaleString('es-ES');
     li.innerHTML = `
-      <div>
-        <b>${n.titulo}</b><br>
-        <span class="text-muted">${n.mensaje}</span><br>
-        <small class="text-muted">${fecha}</small>
+      <div class="d-flex justify-content-between align-items-start gap-3">
+        <div>
+          <b>${n.titulo || 'Notificación'}</b><br>
+          <span class="text-muted">${n.mensaje || ''}</span><br>
+          <small class="text-muted">${fecha}</small>
+        </div>
+        <button type="button" class="btn btn-sm btn-link text-decoration-none p-0" data-action="marcar" data-id="${id}">
+          Marcar como vista
+        </button>
       </div>
     `;
     
@@ -104,15 +121,28 @@ async function cargarNotificaciones() {
       li.style.cursor = 'pointer';
       li.addEventListener('click', () => {
         window.location.href = n.link;
-        marcarComoLeida(n._id);
+        marcarComoLeida(id);
       });
     }
-    
+
+    const boton = li.querySelector('[data-action="marcar"]');
+    if (boton) {
+      boton.addEventListener('click', async (event) => {
+        event.stopPropagation();
+        const ok = await marcarComoLeida(id);
+        if (ok) {
+          li.remove();
+          await cargarNotificaciones();
+        }
+      });
+    }
+
     list.appendChild(li);
   });
 
-  countEl.textContent = data.noLeidas;
-  if (data.noLeidas > 0) {
+  const totalPendientes = pendientes.length > 0 ? pendientes.length : data.noLeidas;
+  countEl.textContent = totalPendientes;
+  if (totalPendientes > 0) {
     countEl.classList.remove("d-none");
   } else {
     countEl.classList.add("d-none");

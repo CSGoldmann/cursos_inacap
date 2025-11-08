@@ -33,6 +33,49 @@ const UsuarioSchema = new mongoose.Schema({
     enum: ['estudiante', 'profesor', 'admin'],
     default: 'estudiante'
   },
+  cursosInscritos: {
+    type: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Curso'
+    }],
+    default: []
+  },
+  progresoCursos: {
+    type: [{
+      curso: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Curso'
+      },
+      progreso: {
+        type: Number,
+        default: 0,
+        min: 0,
+        max: 100
+      },
+      actualizadoEn: {
+        type: Date,
+        default: Date.now
+      }
+    }],
+    default: []
+  },
+  notificacionesNoLeidas: {
+    type: [{
+      notificacion: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Notificacion'
+      },
+      titulo: String,
+      mensaje: String,
+      tipo: String,
+      link: String,
+      fecha: {
+        type: Date,
+        default: Date.now
+      }
+    }],
+    default: []
+  },
   activo: {
     type: Boolean,
     default: true

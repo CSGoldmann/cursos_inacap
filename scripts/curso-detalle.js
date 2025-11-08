@@ -150,8 +150,10 @@ function renderizarDetalleCurso() {
   const container = document.getElementById('curso-detalle-container');
   if (!container) return;
 
+  document.title = `${cursoActual.titulo} | Plataforma de Cursos`;
+
   // Actualizar imagen
-  const imagen = document.querySelector('.course-hero img');
+  const imagen = document.getElementById('curso-imagen');
   if (imagen) {
     imagen.src = cursoActual.imagen || 'Pictures/default-course.jpg';
     imagen.alt = cursoActual.titulo;
@@ -159,43 +161,71 @@ function renderizarDetalleCurso() {
   }
 
   // Actualizar título
-  const titulo = document.querySelector('h1.h3');
+  const titulo = document.getElementById('curso-titulo');
   if (titulo) titulo.textContent = cursoActual.titulo;
 
   // Actualizar información del profesor
-  const profesorInfo = document.querySelector('.text-muted.mb-2');
+  const profesorInfo = document.getElementById('curso-metadata');
   if (profesorInfo) {
     const estrellas = generarEstrellas(cursoActual.calificacion || 0);
+    const valoraciones = Number(cursoActual.numValoraciones || 0).toLocaleString('es-CL');
     profesorInfo.innerHTML = `Profesor: ${cursoActual.profesor?.nombre || 'Sin especificar'} • 
       <span class="text-warning">${estrellas}</span> • 
-      ${cursoActual.numValoraciones || 0} valoraciones`;
+      ${valoraciones} valoraciones`;
   }
 
   // Actualizar descripción
-  const descripcion = document.querySelector('.text-secondary');
-  if (descripcion && cursoActual.descripcion) {
-    descripcion.textContent = cursoActual.descripcion;
+  const descripcion = document.getElementById('curso-descripcion');
+  if (descripcion) {
+    descripcion.textContent = cursoActual.descripcion || 'Descripción no disponible por el momento.';
+  }
+
+  const tagsContainer = document.getElementById('curso-tags');
+  if (tagsContainer) {
+    const etiquetas = [
+      cursoActual.categoria ? { texto: cursoActual.categoria, clase: 'badge bg-light text-dark border' } : null,
+      cursoActual.nivel ? { texto: `Nivel ${cursoActual.nivel}`, clase: 'badge bg-primary-subtle text-primary' } : null,
+      cursoActual.idioma ? { texto: cursoActual.idioma, clase: 'badge bg-secondary-subtle text-secondary' } : null,
+    ].filter(Boolean);
+
+    if (etiquetas.length > 0) {
+      tagsContainer.innerHTML = etiquetas.map(tag => `<span class="${tag.clase} rounded-pill px-3 py-1">${tag.texto}</span>`).join('');
+    } else {
+      tagsContainer.innerHTML = '';
+    }
   }
 
   // Actualizar información del instructor
-  const instructorNombre = document.querySelector('.fw-semibold');
+  const instructorNombre = document.getElementById('instructor-nombre');
   if (instructorNombre) {
     instructorNombre.textContent = cursoActual.profesor?.nombre || 'Sin especificar';
   }
 
-  const instructorDesc = document.querySelector('.small.text-secondary');
+  const instructorDesc = document.getElementById('instructor-bio');
   if (instructorDesc && cursoActual.profesor?.descripcion) {
     instructorDesc.textContent = cursoActual.profesor.descripcion;
   }
 
+  const instructorAvatar = document.getElementById('instructor-avatar');
+  if (instructorAvatar) {
+    instructorAvatar.src = cursoActual.profesor?.avatar || 'Pictures/profile-icon.png';
+    instructorAvatar.alt = cursoActual.profesor?.nombre || 'Instructor del curso';
+  }
+
   // Actualizar detalles del curso
-  const detallesList = document.querySelector('.list-unstyled.small');
+  const detallesList = document.getElementById('curso-detalles-list');
   if (detallesList) {
     detallesList.innerHTML = `
-      <li>Duración: ${cursoActual.duracionTotal || 0}h</li>
+      <li>Duración: ${cursoActual.duracionTotal || 0} h</li>
       <li>Nivel: ${cursoActual.nivel || 'Intermedio'}</li>
       <li>Idioma: ${cursoActual.idioma || 'Español'}</li>
+      <li>Estudiantes inscritos: ${Number(cursoActual.estudiantesInscritos || 0).toLocaleString('es-CL')}</li>
     `;
+  }
+
+  const resumenSidebar = document.getElementById('curso-resumen-sidebar');
+  if (resumenSidebar) {
+    resumenSidebar.textContent = `Obtén acceso completo a ${cursoActual.secciones?.length || 0} secciones, evaluaciones y recursos diseñados para dominar ${cursoActual.titulo.toLowerCase()}.`;
   }
 
   // Renderizar secciones
@@ -284,6 +314,107 @@ function mostrarError(mensaje) {
 document.addEventListener('DOMContentLoaded', () => {
   if (window.location.pathname.includes('curso.html')) {
     cargarDetalleCurso();
+
+    const btnPrimario = document.getElementById('btn-cta-primario');
+    const btnSecundario = document.getElementById('btn-cta-secundario');
+    const btnGuardar = document.getElementById('btn-guardar-favorito');
+
+    if (btnSecundario) {
+      btnSecundario.addEventListener('click', () => {
+        const curriculum = document.getElementById('curriculum');
+        if (curriculum) {
+          curriculum.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      });
+    }
+
+    if (btnGuardar) {
+      btnGuardar.addEventListener('click', () => {
+        alert('Estamos trabajando en la funcionalidad de favoritos. ¡Gracias por tu interés!');
+      });
+    }
+
+    const sincronizarTextoCTA = (textoBoton) => {
+      if (btnPrimario) btnPrimario.textContent = textoBoton;
+    };
+
+    const btnEmpezar = document.getElementById("btn-empezar-ahora");
+    if (btnEmpezar) {
+      const configurarBoton = async () => {
+        if (window.auth) {
+          await window.auth.init();
+          
+          if (!window.auth.estaAutenticado()) {
+            btnEmpezar.textContent = 'Iniciar sesión para comenzar';
+            sincronizarTextoCTA('Iniciar sesión para comenzar');
+            btnEmpezar.onclick = () => window.location.href = 'login.html';
+            if (btnPrimario) btnPrimario.onclick = btnEmpezar.onclick;
+            return;
+          }
+
+          const params = new URLSearchParams(window.location.search);
+          const cursoId = params.get('id');
+          
+          if (!cursoId || cursoId.startsWith('static-')) {
+            btnEmpezar.disabled = true;
+            btnEmpezar.textContent = 'Curso de demostración';
+            sincronizarTextoCTA('Curso de demostración');
+            if (btnPrimario) btnPrimario.disabled = true;
+            return;
+          }
+
+          const estaInscrito = await window.inscripcionesAPI.estaInscrito(cursoId);
+          
+          if (estaInscrito) {
+            const continuar = () => window.location.href = `curso-vista.html?id=${cursoId}`;
+            btnEmpezar.textContent = 'Continuar curso';
+            btnEmpezar.className = 'btn btn-success w-100 mb-2';
+            sincronizarTextoCTA('Continuar curso');
+            btnEmpezar.onclick = continuar;
+            if (btnPrimario) {
+              btnPrimario.className = 'btn btn-success px-4';
+              btnPrimario.onclick = continuar;
+            }
+          } else {
+            const inscribir = async () => {
+              btnEmpezar.disabled = true;
+              btnEmpezar.textContent = 'Inscribiendo...';
+              sincronizarTextoCTA('Inscribiendo...');
+              
+              const resultado = await window.inscripcionesAPI.inscribirse(cursoId);
+              
+              if (resultado.success) {
+                btnEmpezar.textContent = 'Continuar curso';
+                btnEmpezar.className = 'btn btn-success w-100 mb-2';
+                sincronizarTextoCTA('Continuar curso');
+
+                if (window.notificacionesAPI) {
+                  await window.notificacionesAPI.cargarNotificaciones();
+                }
+
+                setTimeout(() => {
+                  window.location.href = `curso-vista.html?id=${cursoId}`;
+                }, 800);
+              } else {
+                alert('Error: ' + (resultado.error || 'No se pudo inscribir'));
+                btnEmpezar.disabled = false;
+                btnEmpezar.textContent = 'Empezar ahora';
+                sincronizarTextoCTA('Empezar ahora');
+              }
+            };
+
+            btnEmpezar.onclick = inscribir;
+            if (btnPrimario) {
+              btnPrimario.onclick = inscribir;
+              btnPrimario.textContent = 'Empezar ahora';
+              btnPrimario.className = 'btn btn-primary px-4';
+            }
+          }
+        }
+      };
+
+      configurarBoton();
+    }
   }
 });
 

@@ -1,7 +1,12 @@
 // scripts/api.js
 // Cliente API para comunicación con el backend
 
-const API_BASE_URL = 'http://localhost:3000/api';
+// Variable global compartida para la URL base de la API
+if (typeof window.API_BASE_URL === 'undefined') {
+  window.API_BASE_URL = 'http://localhost:3000/api';
+}
+// Usar directamente window.API_BASE_URL o crear alias local sin const
+var API_BASE_URL = window.API_BASE_URL;
 
 // Función auxiliar para hacer peticiones HTTP
 async function apiRequest(endpoint, options = {}) {

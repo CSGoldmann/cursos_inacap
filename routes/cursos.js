@@ -3,7 +3,37 @@ const express = require('express');
 const router = express.Router();
 const Curso = require('../models/Curso');
 const { uploadVideo, uploadAudio, uploadImage, uploadMultiple } = require('../config/multer');
-const path = require('path');
+
+const formatVideoPath = (filename) => `/api/media/videos/${filename}`;
+const formatAudioPath = (filename) => `/api/media/audios/${filename}`;
+
+const normalizarRutaMedia = (url, tipo) => {
+  if (!url || typeof url !== 'string') return url;
+  if (tipo === 'video' && url.startsWith('/uploads/videos/')) {
+    return url.replace('/uploads/videos/', '/api/media/videos/');
+  }
+  if (tipo === 'audio' && url.startsWith('/uploads/audios/')) {
+    return url.replace('/uploads/audios/', '/api/media/audios/');
+  }
+  return url;
+};
+
+const requireAuth = (req, res, next) => {
+  if (!req.session.usuario) {
+    return res.status(401).json({ error: 'Debes iniciar sesión' });
+  }
+  next();
+};
+
+const requireAdmin = (req, res, next) => {
+  if (!req.session.usuario) {
+    return res.status(401).json({ error: 'Debes iniciar sesión' });
+  }
+  if (req.session.usuario.rol !== 'admin') {
+    return res.status(403).json({ error: 'Acceso solo para administradores' });
+  }
+  next();
+};
 
 // GET /api/cursos - Obtener todos los cursos
 router.get('/', async (req, res) => {
@@ -29,7 +59,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // POST /api/cursos - Crear un nuevo curso
-router.post('/', uploadImage, async (req, res) => {
+router.post('/', requireAdmin, uploadImage, async (req, res) => {
   try {
     const cursoData = {
       ...req.body,
@@ -50,7 +80,7 @@ router.post('/', uploadImage, async (req, res) => {
 });
 
 // PUT /api/cursos/:id - Actualizar un curso
-router.put('/:id', uploadImage, async (req, res) => {
+router.put('/:id', requireAdmin, uploadImage, async (req, res) => {
   try {
     const updateData = { ...req.body };
     
@@ -81,7 +111,7 @@ router.put('/:id', uploadImage, async (req, res) => {
 });
 
 // DELETE /api/cursos/:id - Eliminar un curso (soft delete)
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireAdmin, async (req, res) => {
   try {
     const curso = await Curso.findByIdAndUpdate(
       req.params.id,
@@ -100,7 +130,7 @@ router.delete('/:id', async (req, res) => {
 });
 
 // POST /api/cursos/:id/secciones - Agregar una sección a un curso
-router.post('/:id/secciones', async (req, res) => {
+router.post('/:id/secciones', requireAdmin, async (req, res) => {
   try {
     const curso = await Curso.findById(req.params.id);
     if (!curso) {
@@ -116,7 +146,7 @@ router.post('/:id/secciones', async (req, res) => {
 });
 
 // PUT /api/cursos/:cursoId/secciones/:seccionId - Actualizar una sección
-router.put('/:cursoId/secciones/:seccionId', async (req, res) => {
+router.put('/:cursoId/secciones/:seccionId', requireAdmin, async (req, res) => {
   try {
     const curso = await Curso.findById(req.params.cursoId);
     if (!curso) {
@@ -137,7 +167,7 @@ router.put('/:cursoId/secciones/:seccionId', async (req, res) => {
 });
 
 // DELETE /api/cursos/:cursoId/secciones/:seccionId - Eliminar una sección
-router.delete('/:cursoId/secciones/:seccionId', async (req, res) => {
+router.delete('/:cursoId/secciones/:seccionId', requireAdmin, async (req, res) => {
   try {
     const curso = await Curso.findById(req.params.cursoId);
     if (!curso) {
@@ -153,7 +183,7 @@ router.delete('/:cursoId/secciones/:seccionId', async (req, res) => {
 });
 
 // POST /api/cursos/:cursoId/secciones/:seccionId/lecciones - Agregar una lección
-router.post('/:cursoId/secciones/:seccionId/lecciones', uploadMultiple, async (req, res) => {
+router.post('/:cursoId/secciones/:seccionId/lecciones', requireAdmin, uploadMultiple, async (req, res) => {
   try {
     const curso = await Curso.findById(req.params.cursoId);
     if (!curso) {
@@ -166,17 +196,27 @@ router.post('/:cursoId/secciones/:seccionId/lecciones', uploadMultiple, async (r
     }
 
     const leccionData = { ...req.body };
+    const videoFile = req.files?.video?.[0];
+    const audioFile = req.files?.audio?.[0];
 
-    // Asignar URLs de archivos subidos
-    if (req.files) {
-      if (req.files.video) {
-        leccionData.urlVideo = `/uploads/videos/${req.files.video[0].filename}`;
-        leccionData.tipo = 'video';
-      }
-      if (req.files.audio) {
-        leccionData.urlAudio = `/uploads/audios/${req.files.audio[0].filename}`;
-        leccionData.tipo = 'audio';
-      }
+    if (videoFile) {
+      leccionData.urlVideo = formatVideoPath(videoFile.filename);
+    } else if (leccionData.urlVideo) {
+      leccionData.urlVideo = normalizarRutaMedia(leccionData.urlVideo, 'video');
+    }
+
+    if (!leccionData.urlVideo) {
+      return res.status(400).json({
+        error: 'Cada módulo requiere un video. Adjunta un archivo MP4, WebM, OGG o MOV.'
+      });
+    }
+
+    leccionData.tipo = 'video';
+
+    if (audioFile) {
+      leccionData.urlAudio = formatAudioPath(audioFile.filename);
+    } else if (leccionData.urlAudio) {
+      leccionData.urlAudio = normalizarRutaMedia(leccionData.urlAudio, 'audio');
     }
 
     seccion.lecciones.push(leccionData);
@@ -188,7 +228,7 @@ router.post('/:cursoId/secciones/:seccionId/lecciones', uploadMultiple, async (r
 });
 
 // PUT /api/cursos/:cursoId/secciones/:seccionId/lecciones/:leccionId - Actualizar una lección
-router.put('/:cursoId/secciones/:seccionId/lecciones/:leccionId', uploadMultiple, async (req, res) => {
+router.put('/:cursoId/secciones/:seccionId/lecciones/:leccionId', requireAdmin, uploadMultiple, async (req, res) => {
   try {
     const curso = await Curso.findById(req.params.cursoId);
     if (!curso) {
@@ -206,17 +246,28 @@ router.put('/:cursoId/secciones/:seccionId/lecciones/:leccionId', uploadMultiple
     }
 
     const updateData = { ...req.body };
+    const videoFile = req.files?.video?.[0];
+    const audioFile = req.files?.audio?.[0];
 
-    // Actualizar URLs de archivos si se subieron nuevos
-    if (req.files) {
-      if (req.files.video) {
-        updateData.urlVideo = `/uploads/videos/${req.files.video[0].filename}`;
-        updateData.tipo = 'video';
-      }
-      if (req.files.audio) {
-        updateData.urlAudio = `/uploads/audios/${req.files.audio[0].filename}`;
-        updateData.tipo = 'audio';
-      }
+    if (videoFile) {
+      updateData.urlVideo = formatVideoPath(videoFile.filename);
+    } else if (updateData.urlVideo) {
+      updateData.urlVideo = normalizarRutaMedia(updateData.urlVideo, 'video');
+    }
+
+    const urlVideoFinal = updateData.urlVideo || leccion.urlVideo;
+    if (!urlVideoFinal) {
+      return res.status(400).json({
+        error: 'Las lecciones deben conservar un video asociado.'
+      });
+    }
+
+    updateData.tipo = 'video';
+
+    if (audioFile) {
+      updateData.urlAudio = formatAudioPath(audioFile.filename);
+    } else if (updateData.urlAudio) {
+      updateData.urlAudio = normalizarRutaMedia(updateData.urlAudio, 'audio');
     }
 
     Object.assign(leccion, updateData);
@@ -228,7 +279,7 @@ router.put('/:cursoId/secciones/:seccionId/lecciones/:leccionId', uploadMultiple
 });
 
 // DELETE /api/cursos/:cursoId/secciones/:seccionId/lecciones/:leccionId - Eliminar una lección
-router.delete('/:cursoId/secciones/:seccionId/lecciones/:leccionId', async (req, res) => {
+router.delete('/:cursoId/secciones/:seccionId/lecciones/:leccionId', requireAdmin, async (req, res) => {
   try {
     const curso = await Curso.findById(req.params.cursoId);
     if (!curso) {
