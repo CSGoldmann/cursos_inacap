@@ -1,44 +1,33 @@
 <header class="bg-white border-bottom py-3 px-4">
-    <div class="d-flex align-items-center">
-        <div class="dropdown" id="notif-wrapper">
-        <button id="notif-bell" 
-            class="btn btn-light rounded-circle p-2 position-relative" 
-                    type="button" 
-                    data-bs-toggle="dropdown" 
-                    aria-expanded="false">
-                <img src="Pictures/bell.png" alt="Notificaciones" style="width: 24px; height: 24px;" />
-                <span id="notif-count" class="position-absolute top-0 end-0 translate-middle badge rounded-pill bg-danger">
-                    3
-                </span>
-            </button>
+    <div class="d-flex align-items-center justify-content-between">
+        <div class="d-flex align-items-center gap-2">
+            <h1 class="h6 mb-0 fw-semibold text-secondary text-uppercase">Panel</h1>
+        </div>
+        <div class="d-flex align-items-center gap-3">
+            <div class="dropdown" id="notif-wrapper">
+                <button id="notif-bell"
+                        class="btn btn-light rounded-circle p-2 position-relative"
+                        type="button"
+                        data-bs-toggle="dropdown"
+                        aria-expanded="false"
+                        aria-label="Abrir notificaciones">
+                    <img src="Pictures/bell.png" alt="Notificaciones" style="width: 22px; height: 22px;">
+                    <span id="notif-count" class="position-absolute top-0 end-0 translate-middle badge rounded-pill bg-danger d-none"></span>
+                </button>
 
-            <div id="notif-menu" class="dropdown-menu dropdown-menu-end shadow-sm" style="width: 320px;">
-                <div class="py-2">
-                    <div class="px-3 py-2 border-bottom fw-medium">Notificaciones</div>
-                    <div id="notif-list" style="max-height: 240px; overflow-y: auto;">
-                        <a href="#" data-id="1" class="notification-item dropdown-item px-3 py-2">
-                            <div class="d-flex flex-column">
-                                <span class="fw-medium">Nueva tarea subida</span>
-                                <small class="text-secondary">Matemáticas II</small>
-                            </div>
-                        </a>
-                        <a href="#" data-id="2" class="notification-item dropdown-item px-3 py-2">
-                            <div class="d-flex flex-column">
-                                <span class="fw-medium">Mensaje del docente</span>
-                                <small class="text-secondary">Programación Web</small>
-                            </div>
-                        </a>
-                        <a href="#" data-id="3" class="notification-item dropdown-item px-3 py-2">
-                            <div class="d-flex flex-column">
-                                <span class="fw-medium">Asistencia baja</span>
-                                <small class="text-secondary">Física I</small>
-                            </div>
-                        </a>
-                    </div>
-                    <div class="border-top">
-                        <button id="mark-all-read" class="dropdown-item text-primary text-center py-2" type="button">
-                            Marcar todo como leído
-                        </button>
+                <div id="notif-menu" class="dropdown-menu dropdown-menu-end shadow-sm" style="width: 320px;">
+                    <div class="py-2">
+                        <div class="px-3 py-2 border-bottom fw-medium">Notificaciones</div>
+                        <ul id="notif-list" class="list-unstyled mb-0" style="max-height: 260px; overflow-y: auto;">
+                            <li class="px-3 py-3 text-center text-secondary small">
+                                No hay notificaciones pendientes
+                            </li>
+                        </ul>
+                        <div class="border-top">
+                            <button id="mark-all-read" class="dropdown-item text-primary text-center py-2" type="button">
+                                Marcar todo como leído
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>

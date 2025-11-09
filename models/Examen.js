@@ -59,7 +59,7 @@ const ExamenSchema = new mongoose.Schema({
   },
   intentosPermitidos: {
     type: Number,
-    default: 3
+    default: 2
   },
   porcentajeAprobacion: {
     type: Number,

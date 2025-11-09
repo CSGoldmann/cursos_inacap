@@ -8,19 +8,20 @@ const uploadsDir = path.join(__dirname, '../uploads');
 const videosDir = path.join(uploadsDir, 'videos');
 const audiosDir = path.join(uploadsDir, 'audios');
 const imagesDir = path.join(uploadsDir, 'images');
+const diplomasDir = path.join(uploadsDir, 'diplomas');
 
-[uploadsDir, videosDir, audiosDir, imagesDir].forEach(dir => {
+[uploadsDir, videosDir, audiosDir, imagesDir, diplomasDir].forEach(dir => {
   fs.ensureDirSync(dir);
 });
 
 // Configuración de almacenamiento
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    if (file.fieldname === 'video') {
+  if (file.fieldname === 'video') {
       cb(null, videosDir);
-    } else if (file.fieldname === 'audio') {
+  } else if (file.fieldname === 'audio') {
       cb(null, audiosDir);
-    } else if (file.fieldname === 'imagen') {
+  } else if (file.fieldname === 'imagen' || file.fieldname === 'fotoPerfil') {
       cb(null, imagesDir);
     } else {
       cb(null, uploadsDir);
@@ -53,7 +54,7 @@ const fileFilter = (req, file, cb) => {
     } else {
       cb(new Error('Tipo de audio no permitido. Solo: MP3, WAV, OGG, WebM'), false);
     }
-  } else if (file.fieldname === 'imagen') {
+  } else if (file.fieldname === 'imagen' || file.fieldname === 'fotoPerfil') {
     if (allowedImageTypes.includes(file.mimetype)) {
       cb(null, true);
     } else {
@@ -92,6 +93,7 @@ module.exports = {
   videosDir,
   audiosDir,
   imagesDir,
-  uploadsDir
+  uploadsDir,
+  diplomasDir
 };
 

@@ -21,6 +21,7 @@
     "dotenv": "^16.3.1",
     "path": "^0.12.7",
     "fs-extra": "^11.2.0",
+    "pdfkit": "^0.13.0",
     "bcryptjs": "^2.4.3",
     "express-session": "^1.17.3"
   },

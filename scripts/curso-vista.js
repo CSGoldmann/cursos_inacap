@@ -7,6 +7,9 @@ let leccionActual = null;
 let seccionActual = null;
 let indiceSeccionActual = 0;
 let indiceLeccionActual = 0;
+let examenesAprobados = new Set();
+let examenFinalAprobado = false;
+let diplomaActual = null;
 
 const MEDIA_MIME_TYPES = {
   '.mp4': 'video/mp4',
@@ -45,6 +48,54 @@ function obtenerMimeDesdeUrl(url, tipoPorDefecto) {
   return MEDIA_MIME_TYPES[extension] || tipoPorDefecto;
 }
 
+async function actualizarEstadoExamenes() {
+  if (!cursoActual) return;
+  try {
+    const cursoId = cursoActual._id || cursoActual.id;
+    const resultados = await window.examenesAPI.obtenerResultadosExamenes(cursoId);
+    examenesAprobados = new Set();
+    examenFinalAprobado = false;
+    if (Array.isArray(resultados)) {
+      resultados.forEach(resultado => {
+        if (!resultado?.aprobado || !resultado?.examen) return;
+        const examen = resultado.examen;
+        if (examen.tipo === 'final') {
+          examenFinalAprobado = true;
+        }
+        if (examen.seccion) {
+          examenesAprobados.add(examen.seccion.toString());
+        }
+      });
+    }
+  } catch (error) {
+    console.error('Error al actualizar estado de exámenes:', error);
+  }
+}
+
+async function cargarDiplomaCurso() {
+  if (!cursoActual || !window.diplomasAPI) {
+    diplomaActual = null;
+    return;
+  }
+
+  try {
+    const cursoId = cursoActual._id || cursoActual.id;
+    const diploma = await window.diplomasAPI.obtenerDiplomaCurso(cursoId);
+    if (diploma) {
+      diplomaActual = {
+        ...diploma,
+        url: diploma.url || diploma.archivoPublico,
+        downloadUrl: diploma.downloadUrl || (diploma._id ? `/api/diplomas/${diploma._id}/descargar` : null)
+      };
+    } else {
+      diplomaActual = null;
+    }
+  } catch (error) {
+    console.error('Error al cargar diploma del curso:', error);
+    diplomaActual = null;
+  }
+}
+
 function obtenerProgresoLeccionActual() {
   if (!inscripcionActual || !leccionActual) return null;
   return inscripcionActual.progresoLecciones?.find(
@@ -73,6 +124,7 @@ async function registrarVideoCompletado() {
       cursoId,
       leccionActual._id,
       {
+        completado: true,
         videoCompletado: true,
         progreso: 100
       }
@@ -83,8 +135,11 @@ async function registrarVideoCompletado() {
       renderizarSidebar();
       actualizarNavegacion();
     }
+
+    return resultado;
   } catch (error) {
     console.error('Error al registrar video completado:', error);
+    return false;
   }
 }
 
@@ -134,6 +189,9 @@ async function cargarCursoVista() {
 
     cursoActual = curso;
     inscripcionActual = inscripcion;
+
+    await actualizarEstadoExamenes();
+    await cargarDiplomaCurso();
     
     renderizarSidebar();
     
@@ -160,18 +218,34 @@ function renderizarSidebar() {
 
   // Actualizar título y progreso
   if (tituloSidebar) tituloSidebar.textContent = cursoActual.titulo;
-  if (progresoSidebar) progresoSidebar.textContent = `${inscripcionActual.progresoGeneral}% completado`;
+  const progresoGeneral = inscripcionActual.progresoGeneral || 0;
+  const cursoCompletado = Boolean(diplomaActual) || inscripcionActual?.estado === 'completado';
+  if (progresoSidebar) {
+    progresoSidebar.textContent = cursoCompletado
+      ? 'Curso completado'
+      : `${progresoGeneral}% completado`;
+  }
   if (progresoBar) {
-    progresoBar.style.width = `${inscripcionActual.progresoGeneral}%`;
-    progresoBar.setAttribute('aria-valuenow', inscripcionActual.progresoGeneral);
+    const valorBarra = cursoCompletado ? 100 : progresoGeneral;
+    progresoBar.style.width = `${valorBarra}%`;
+    progresoBar.setAttribute('aria-valuenow', valorBarra);
   }
 
   // Renderizar secciones
   if (!seccionesLista) return;
 
   const seccionesOrdenadas = [...(cursoActual.secciones || [])].sort((a, b) => a.orden - b.orden);
-  
-  seccionesLista.innerHTML = seccionesOrdenadas.map((seccion, seccionIdx) => {
+
+  let seccionesHtml = '';
+
+  seccionesOrdenadas.forEach((seccion, seccionIdx) => {
+    const seccionIdStr = seccion?._id ? seccion._id.toString() : String(seccionIdx);
+    const seccionAnterior = seccionIdx > 0 ? seccionesOrdenadas[seccionIdx - 1] : null;
+    const seccionAnteriorId = seccionAnterior?._id ? seccionAnterior._id.toString() : null;
+    const seccionHabilitada = seccionIdx === 0 ||
+      !seccionAnterior?.tieneExamen ||
+      (seccionAnteriorId && examenesAprobados.has(seccionAnteriorId));
+    const seccionDisponible = cursoCompletado || seccionHabilitada;
     const lecciones = (seccion.lecciones || []).sort((a, b) => a.orden - b.orden);
     const leccionesCompletadas = lecciones.filter(lec => {
       const progreso = inscripcionActual.progresoLecciones.find(
@@ -179,58 +253,142 @@ function renderizarSidebar() {
       );
       return progreso && progreso.completado;
     }).length;
+    const todasLeccionesCompletadas = lecciones.length === 0 || leccionesCompletadas === lecciones.length;
+    const controlAprobado = !seccion.tieneExamen || examenesAprobados.has(seccionIdStr);
 
-    return `
+    const listaLeccionesHtml = lecciones.map((leccion, lecIdx) => {
+      const progreso = inscripcionActual.progresoLecciones.find(
+        p => p.leccionId.toString() === leccion._id.toString()
+      );
+      const completada = progreso && progreso.completado;
+      const claseEstado = completada ? 'lesson-completed' : '';
+      const clasesItem = ['list-group-item', 'list-group-item-action', claseEstado];
+      if (!seccionDisponible) {
+        clasesItem.push('disabled', 'opacity-75');
+      }
+      const bloqueoMensaje = cursoCompletado
+        ? 'Curso completado. Puedes revisar las clases cuando quieras.'
+        : 'Aprueba el control de la sección anterior para acceder.';
+      const attrsDisabled = !seccionDisponible ? 'aria-disabled="true" tabindex="-1"' : '';
+      const accion = seccionDisponible
+        ? `onclick="cargarLeccion(${seccionIdx}, ${lecIdx}); return false;"`
+        : `onclick="alert('${bloqueoMensaje}'); return false;"`;
+
+      return `
+        <a href="#" class="${clasesItem.join(' ').trim()}" 
+           data-seccion="${seccionIdx}" data-leccion="${lecIdx}"
+           ${attrsDisabled}
+           title="${!seccionHabilitada ? bloqueoMensaje : ''}"
+           ${accion}>
+          <div class="d-flex align-items-center">
+            <i class="bi ${completada ? 'bi-check-circle-fill text-success' : 'bi-circle'} me-2"></i>
+            <div class="flex-grow-1">
+              <div class="small">${leccion.titulo}</div>
+              ${leccion.tipo === 'video' ? '<span class="badge bg-primary">Video</span>' : ''}
+              ${leccion.tipo === 'audio' ? '<span class="badge bg-info">Audio</span>' : ''}
+            </div>
+          </div>
+        </a>
+      `;
+    }).join('');
+
+    let bloqueControl = '';
+    if (seccion.tieneExamen) {
+      const mensajes = [];
+      let clasesBoton = ['btn', 'btn-sm', 'w-100'];
+      let disabledAttr = '';
+
+      if (cursoCompletado) {
+        clasesBoton.push('btn-outline-success');
+        disabledAttr = 'disabled';
+        mensajes.push('<div class="small text-success mt-2">Curso completado. No es necesario volver a rendir este control.</div>');
+      } else if (!seccionDisponible) {
+        clasesBoton.push('btn-outline-secondary');
+        disabledAttr = 'disabled';
+        mensajes.push('<div class="small text-secondary mt-2">Aprueba el control de la sección anterior para habilitar esta sección.</div>');
+      } else if (!todasLeccionesCompletadas) {
+        clasesBoton.push('btn-outline-secondary');
+        disabledAttr = 'disabled';
+        mensajes.push('<div class="small text-secondary mt-2">Completa todos los módulos antes de rendir el control.</div>');
+      } else if (controlAprobado) {
+        clasesBoton.push('btn-outline-success');
+        mensajes.push('<div class="small text-success mt-2">Control aprobado. Puedes avanzar a la siguiente sección.</div>');
+      } else {
+        clasesBoton.push('btn-outline-warning');
+        mensajes.push('<div class="small text-secondary mt-2">Rinde el control para habilitar la siguiente sección.</div>');
+      }
+
+      bloqueControl = `
+        <div class="p-3 border-top">
+          <button class="${clasesBoton.join(' ')}"
+                  data-seccion-id="${seccion._id}"
+                  ${disabledAttr}
+                  onclick="window.abrirExamen('${seccion._id}')">
+            <i class="bi bi-file-earmark-text"></i> Control de Sección
+          </button>
+          ${mensajes.join('')}
+        </div>
+      `;
+    }
+
+    seccionesHtml += `
       <div class="mb-3">
         <div class="px-3 py-2 bg-light fw-semibold small">
           ${seccionIdx + 1}. ${seccion.titulo}
           <span class="text-muted float-end">${leccionesCompletadas}/${lecciones.length}</span>
         </div>
         <div class="list-group list-group-flush">
-          ${lecciones.map((leccion, lecIdx) => {
-            const progreso = inscripcionActual.progresoLecciones.find(
-              p => p.leccionId.toString() === leccion._id.toString()
-            );
-            const completada = progreso && progreso.completado;
-            const claseEstado = completada ? 'lesson-completed' : '';
-            
-            return `
-              <a href="#" class="list-group-item list-group-item-action ${claseEstado}" 
-                 data-seccion="${seccionIdx}" data-leccion="${lecIdx}" 
-                 onclick="cargarLeccion(${seccionIdx}, ${lecIdx}); return false;">
-                <div class="d-flex align-items-center">
-                  <i class="bi ${completada ? 'bi-check-circle-fill text-success' : 'bi-circle'} me-2"></i>
-                  <div class="flex-grow-1">
-                    <div class="small">${leccion.titulo}</div>
-                    ${leccion.tipo === 'video' ? '<span class="badge bg-primary">Video</span>' : ''}
-                    ${leccion.tipo === 'audio' ? '<span class="badge bg-info">Audio</span>' : ''}
-                  </div>
-                </div>
-              </a>
-            `;
-          }).join('')}
+          ${listaLeccionesHtml}
         </div>
-        ${seccion.tieneExamen ? `
-          <button class="btn btn-sm btn-outline-warning w-100 mt-2" 
-                  data-seccion-id="${seccion._id}" onclick="window.abrirExamen('${seccion._id}')">
-            <i class="bi bi-file-earmark-text"></i> Examen de Sección
-          </button>
-        ` : ''}
+        ${bloqueControl}
       </div>
     `;
-  }).join('');
+  });
 
-  // Agregar examen final si existe
+  seccionesLista.innerHTML = seccionesHtml;
+
   if (seccionesOrdenadas.length > 0) {
     const ultimaSeccion = seccionesOrdenadas[seccionesOrdenadas.length - 1];
     if (ultimaSeccion.tieneExamen) {
-      seccionesLista.innerHTML += `
-        <div class="border-top pt-3 mt-3">
-          <button class="btn btn-warning w-100" onclick="window.abrirExamen(null, true)">
-            <i class="bi bi-trophy"></i> Examen Final
-          </button>
-        </div>
-      `;
+      if (cursoCompletado && diplomaActual) {
+        const diplomaUrl = diplomaActual.downloadUrl || diplomaActual.url;
+        seccionesLista.innerHTML += `
+          <div class="border-top pt-3 mt-3">
+            <div class="alert alert-success d-flex align-items-start gap-3 mb-0">
+              <i class="bi bi-trophy-fill fs-3"></i>
+              <div>
+                <div class="fw-semibold mb-1">¡Curso completado!</div>
+                <div class="small text-muted">Descarga tu diploma para compartir tu logro.</div>
+                <a class="btn btn-success btn-sm mt-2" href="${diplomaUrl}" target="_blank" rel="noopener"
+                   download="${diplomaActual.nombreArchivo || 'diploma.pdf'}">
+                  <i class="bi bi-award"></i> Descargar diploma
+                </a>
+              </div>
+            </div>
+          </div>
+        `;
+      } else {
+        const todosControlesAprobados = seccionesOrdenadas.every(sec => {
+          if (!sec?.tieneExamen) return true;
+          const secIdStr = sec?._id ? sec._id.toString() : '';
+          return examenesAprobados.has(secIdStr);
+        });
+        const finalHabilitado = !cursoCompletado &&
+          todosControlesAprobados &&
+          (inscripcionActual?.progresoGeneral || 0) >= 100;
+        seccionesLista.innerHTML += `
+          <div class="border-top pt-3 mt-3">
+            <button class="btn ${finalHabilitado ? 'btn-warning' : 'btn-outline-secondary'} w-100"
+                    ${finalHabilitado ? '' : 'disabled'}
+                    onclick="window.abrirExamen(null, true)">
+              <i class="bi bi-trophy"></i> Examen Final
+            </button>
+            ${finalHabilitado
+              ? (examenFinalAprobado ? '<div class="small text-success mt-2">Examen final aprobado.</div>' : '')
+              : '<div class="small text-secondary mt-2">Aprueba todos los controles y completa el curso para habilitar el examen final.</div>'}
+          </div>
+        `;
+      }
     }
   }
 }
@@ -243,6 +401,17 @@ async function cargarLeccion(seccionIdx, leccionIdx) {
   const seccion = secciones[seccionIdx];
   
   if (!seccion) return;
+
+  if (seccionIdx > 0) {
+    const seccionAnterior = secciones[seccionIdx - 1];
+    if (seccionAnterior?.tieneExamen) {
+      const seccionAnteriorId = seccionAnterior?._id ? seccionAnterior._id.toString() : null;
+      if (!(seccionAnteriorId && examenesAprobados.has(seccionAnteriorId))) {
+        alert('Aprueba el control de la sección anterior para continuar.');
+        return;
+      }
+    }
+  }
 
   const lecciones = [...(seccion.lecciones || [])].sort((a, b) => a.orden - b.orden);
   const leccion = lecciones[leccionIdx];
@@ -370,18 +539,19 @@ function mostrarLeccion(leccion) {
     const videoElement = contenido.querySelector('video');
     if (videoElement) {
       videoElement.dataset.reported = videoElement.dataset.reported || '';
-      const marcarFinalizado = () => {
-        if (videoElement.dataset.reported === 'done') return;
-        videoElement.dataset.reported = 'done';
-        registrarVideoCompletado();
+      const marcarFinalizado = async () => {
+        if (videoElement.dataset.reported === 'done' || videoElement.dataset.reported === 'pending') return;
+        videoElement.dataset.reported = 'pending';
+        const exito = await registrarVideoCompletado();
+        videoElement.dataset.reported = exito ? 'done' : '';
       };
 
       videoElement.addEventListener('ended', marcarFinalizado);
-      videoElement.addEventListener('timeupdate', () => {
+      videoElement.addEventListener('timeupdate', async () => {
         if (!videoElement.duration) return;
         const porcentaje = videoElement.currentTime / videoElement.duration;
         if (porcentaje >= 0.95) {
-          marcarFinalizado();
+          await marcarFinalizado();
         }
       });
     }
@@ -401,6 +571,7 @@ function actualizarNavegacion() {
   if (!cursoActual) return;
 
   const secciones = [...(cursoActual.secciones || [])].sort((a, b) => a.orden - b.orden);
+  const cursoCompletado = Boolean(diplomaActual) || inscripcionActual?.estado === 'completado';
   
   // Verificar si hay lección anterior
   let tieneAnterior = false;
@@ -413,8 +584,12 @@ function actualizarNavegacion() {
 
   // Verificar si hay lección siguiente
   let tieneSiguiente = false;
-  const seccionActual = secciones[indiceSeccionActual];
-  if (seccionActual && indiceLeccionActual < seccionActual.lecciones.length - 1) {
+  const seccionEnCurso = secciones[indiceSeccionActual];
+  const leccionesEnCurso = Array.isArray(seccionEnCurso?.lecciones)
+    ? [...seccionEnCurso.lecciones].sort((a, b) => a.orden - b.orden)
+    : [];
+
+  if (leccionesEnCurso.length > 0 && indiceLeccionActual < leccionesEnCurso.length - 1) {
     tieneSiguiente = true;
   } else if (indiceSeccionActual < secciones.length - 1) {
     const seccionSiguiente = secciones[indiceSeccionActual + 1];
@@ -437,10 +612,29 @@ function actualizarNavegacion() {
   }
 
   if (btnSiguiente) {
-    btnSiguiente.disabled = !tieneSiguiente;
+    const progreso = obtenerProgresoLeccionActual();
+    const completada = progreso && progreso.completado;
+    const videoVisto = progreso && progreso.videoCompletado;
+    const requiereVideo = leccionActual?.tipo === 'video';
+    const esUltimaLeccionSeccion = leccionesEnCurso.length > 0 && indiceLeccionActual >= leccionesEnCurso.length - 1;
+    const requiereControlParaAvanzar = esUltimaLeccionSeccion && indiceSeccionActual < secciones.length - 1;
+    const seccionIdActual = seccionEnCurso?._id ? seccionEnCurso._id.toString() : null;
+    const controlAprobado = !seccionEnCurso?.tieneExamen || (seccionIdActual && examenesAprobados.has(seccionIdActual));
+    const controlPermiteContinuar = cursoCompletado || !requiereControlParaAvanzar || controlAprobado;
+    const puedeContinuar = (!requiereVideo || completada || videoVisto) && controlPermiteContinuar;
+
+    btnSiguiente.disabled = !tieneSiguiente || !puedeContinuar;
+    if (!cursoCompletado && !controlPermiteContinuar && requiereControlParaAvanzar) {
+      btnSiguiente.title = 'Aprueba el control de la sección para continuar.';
+    } else if (!puedeContinuar && requiereVideo) {
+      btnSiguiente.title = 'Debes visualizar el video completo para continuar.';
+    } else {
+      btnSiguiente.removeAttribute('title');
+    }
+
     if (tieneSiguiente) {
       btnSiguiente.onclick = () => {
-        if (indiceLeccionActual < seccionActual.lecciones.length - 1) {
+        if (indiceLeccionActual < leccionesEnCurso.length - 1) {
           cargarLeccion(indiceSeccionActual, indiceLeccionActual + 1);
         } else if (indiceSeccionActual < secciones.length - 1) {
           cargarLeccion(indiceSeccionActual + 1, 0);
@@ -451,18 +645,17 @@ function actualizarNavegacion() {
 
   // Botón marcar como completada
   if (btnMarcar && leccionActual) {
-    const progreso = inscripcionActual.progresoLecciones.find(
-      p => p.leccionId.toString() === leccionActual._id.toString()
-    );
+    const progreso = obtenerProgresoLeccionActual();
     const completada = progreso && progreso.completado;
     const videoVisto = progreso && progreso.videoCompletado;
+    const requiereVideo = leccionActual?.tipo === 'video';
 
     btnMarcar.innerHTML = completada 
       ? '<i class="bi bi-check-circle-fill"></i> Completada'
       : '<i class="bi bi-check-circle"></i> Marcar como Completada';
     btnMarcar.className = completada ? 'btn btn-success' : 'btn btn-outline-success';
-    btnMarcar.disabled = !completada && !videoVisto;
-    if (!completada && !videoVisto) {
+    btnMarcar.disabled = !completada && requiereVideo && !videoVisto;
+    if (!completada && requiereVideo && !videoVisto) {
       btnMarcar.title = 'Debes visualizar el video para habilitar esta acción.';
     } else {
       btnMarcar.removeAttribute('title');
@@ -497,8 +690,9 @@ async function marcarLeccionCompletada(completado) {
   try {
     const cursoId = cursoActual._id || cursoActual.id;
     const progreso = obtenerProgresoLeccionActual();
+    const requiereVideo = leccionActual?.tipo === 'video';
 
-    if (completado) {
+    if (completado && requiereVideo) {
       if (!progreso || !progreso.videoCompletado) {
         alert('Debes visualizar el video completo antes de marcar la lección como completada.');
         return;
@@ -540,10 +734,28 @@ async function actualizarUltimaLeccion(leccionId) {
 // Abrir examen
 async function abrirExamen(seccionId, esFinal = false) {
   if (!cursoActual) return;
+  if (diplomaActual) {
+    alert('Ya finalizaste este curso. Descarga tu diploma desde la barra lateral.');
+    return;
+  }
 
   try {
     const cursoId = cursoActual._id || cursoActual.id;
-    const examen = await window.examenesAPI.obtenerExamen(cursoId, seccionId, esFinal);
+    const { examen, error, diploma } = await window.examenesAPI.obtenerExamen(cursoId, seccionId, esFinal);
+
+    if (diploma) {
+      diplomaActual = {
+        ...diploma,
+        url: diploma.url || diploma.archivoPublico,
+        downloadUrl: diploma.downloadUrl || (diploma.id ? `/api/diplomas/${diploma.id}/descargar` : null)
+      };
+      renderizarSidebar();
+    }
+    
+    if (error) {
+      alert(error);
+      return;
+    }
     
     if (!examen) {
       alert('No hay examen disponible para esta sección');
@@ -658,6 +870,20 @@ async function enviarExamen(examen) {
     );
 
     if (resultado.success) {
+      if (resultado.diploma) {
+        diplomaActual = resultado.diploma;
+      }
+
+      await recargarInscripcionActual();
+      await actualizarEstadoExamenes();
+      await cargarDiplomaCurso();
+      renderizarSidebar();
+      actualizarNavegacion();
+
+      if (resultado.reiniciado) {
+        cargarPrimeraLeccion();
+      }
+
       mostrarResultadoExamen(resultado);
     } else {
       alert('Error al enviar el examen: ' + (resultado.error || 'Error desconocido'));
@@ -681,6 +907,32 @@ function mostrarResultadoExamen(resultado) {
     ? `<div class="alert alert-success"><h5><i class="bi bi-check-circle-fill"></i> ¡Aprobado!</h5></div>`
     : `<div class="alert alert-danger"><h5><i class="bi bi-x-circle-fill"></i> No Aprobado</h5></div>`;
 
+  const intentosRestantesCalculados = typeof resultado.intentosRestantes === 'number'
+    ? resultado.intentosRestantes
+    : Math.max((resultado.intentosPermitidos || 0) - (resultado.intento || 0), 0);
+
+  const infoIntentos = `
+    <div class="alert alert-info">
+      <strong>Intento:</strong> ${resultado.intento} de ${resultado.intentosPermitidos}<br>
+      ${resultado.reiniciado ? 'Intentos restantes: 0' : `Intentos restantes: ${intentosRestantesCalculados}`}
+    </div>
+    ${resultado.reiniciado ? `
+      <div class="alert alert-warning mt-3">
+        <strong>Curso reiniciado:</strong> Alcanzaste el límite de intentos. Tus avances fueron reiniciados y debes completar nuevamente todas las lecciones antes de volver a presentar el examen.
+      </div>
+    ` : ''}
+  `;
+
+  const diplomaUrl = resultado.diploma?.downloadUrl || resultado.diploma?.url;
+  const diplomaHtml = diplomaUrl ? `
+    <div class="mt-4 text-center">
+      <a href="${diplomaUrl}" class="btn btn-success" target="_blank" rel="noopener" download="${resultado.diploma.nombreArchivo || 'diploma.pdf'}">
+        <i class="bi bi-award"></i> Descargar diploma
+      </a>
+      ${resultado.diploma.fechaEmision ? `<p class="small text-muted mt-2">Emitido el ${new Date(resultado.diploma.fechaEmision).toLocaleString('es-CL')}</p>` : ''}
+    </div>
+  ` : '';
+
   contenidoExamen.innerHTML = `
     ${mensaje}
     <div class="text-center my-4">
@@ -688,17 +940,17 @@ function mostrarResultadoExamen(resultado) {
       <p>Puntaje: ${resultado.puntajeTotal} / ${resultado.puntajeMaximo}</p>
       <p>Porcentaje mínimo para aprobar: ${resultado.porcentajeAprobacion}%</p>
     </div>
-    <div class="alert alert-info">
-      <strong>Intento:</strong> ${resultado.intento} de ${resultado.intentosPermitidos}
-    </div>
+    ${infoIntentos}
+    ${diplomaHtml}
   `;
 
   if (btnEnviar) {
     btnEnviar.textContent = 'Cerrar';
-    btnEnviar.onclick = () => {
+    btnEnviar.onclick = async () => {
       bootstrap.Modal.getInstance(document.getElementById('modalExamen')).hide();
-      // Recargar sidebar para actualizar progreso
+      await recargarInscripcionActual();
       renderizarSidebar();
+      actualizarNavegacion();
     };
   }
 }

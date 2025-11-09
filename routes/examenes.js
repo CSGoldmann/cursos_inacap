@@ -4,6 +4,11 @@ const router = express.Router();
 const Examen = require('../models/Examen');
 const RespuestaExamen = require('../models/RespuestaExamen');
 const Curso = require('../models/Curso');
+const Inscripcion = require('../models/Inscripcion');
+const Usuario = require('../models/Usuario');
+const Diploma = require('../models/Diploma');
+const Notificacion = require('../models/Notificacion');
+const generarDiploma = require('../utils/diplomaGenerator');
 
 // Middleware para verificar autenticación
 const requireAuth = (req, res, next) => {
@@ -37,6 +42,87 @@ router.get('/curso/:cursoId', requireAuth, async (req, res) => {
       return res.status(404).json({ error: 'Examen no encontrado' });
     }
 
+    const inscripcion = await Inscripcion.findOne({
+      usuario: req.session.usuario.id,
+      curso: cursoId
+    });
+
+    if (!inscripcion) {
+      return res.status(403).json({ error: 'Debes estar inscrito en el curso para rendir el examen.' });
+    }
+
+  const diploma = await Diploma.findOne({
+    usuario: req.session.usuario.id,
+    curso: cursoId
+  }).select('_id archivoPublico');
+
+  if (inscripcion.estado === 'completado' || diploma) {
+    return res.status(403).json({
+      error: 'Ya finalizaste este curso. Descarga tu diploma en la sección de certificados.',
+      diploma: diploma ? {
+        id: diploma._id,
+        url: diploma.archivoPublico,
+        downloadUrl: `/api/diplomas/${diploma._id}/descargar`
+      } : null
+    });
+  }
+
+    const curso = await Curso.findById(cursoId);
+    if (!curso) {
+      return res.status(404).json({ error: 'Curso no encontrado' });
+    }
+
+    const leccionesCompletadas = new Set(
+      inscripcion.progresoLecciones
+        .filter(l => l.completado)
+        .map(l => l.leccionId.toString())
+    );
+
+    const esExamenFinal = tipo === 'final' || examen.tipo === 'final';
+
+    if (esExamenFinal) {
+      const todasLasLecciones = [];
+      (curso.secciones || []).forEach(sec => {
+        (sec.lecciones || []).forEach(lec => {
+          if (lec?._id) {
+            todasLasLecciones.push(lec._id.toString());
+          }
+        });
+      });
+
+      const leccionesPendientes = todasLasLecciones.filter(id => !leccionesCompletadas.has(id));
+
+      if (leccionesPendientes.length > 0) {
+        return res.status(403).json({
+          error: 'Debes completar todas las secciones antes de rendir el examen final.'
+        });
+      }
+    } else {
+      const seccionId = seccion || (examen.seccion ? examen.seccion.toString() : null);
+
+      if (!seccionId) {
+        return res.status(400).json({ error: 'Sección no especificada para el examen.' });
+      }
+
+      const seccionCurso = curso.secciones.id(seccionId) ||
+        (curso.secciones || []).find(sec => sec._id.toString() === seccionId);
+
+      if (!seccionCurso) {
+        return res.status(404).json({ error: 'Sección no encontrada' });
+      }
+
+      const leccionesPendientes = (seccionCurso.lecciones || []).filter(lec => {
+        if (!lec?._id) return false;
+        return !leccionesCompletadas.has(lec._id.toString());
+      });
+
+      if (leccionesPendientes.length > 0) {
+        return res.status(403).json({
+          error: 'Completa todas las lecciones de la sección antes de realizar el examen.'
+        });
+      }
+    }
+
     // No enviar respuestas correctas al cliente
     const examenParaCliente = examen.toObject();
     examenParaCliente.preguntas = examenParaCliente.preguntas.map(p => {
@@ -57,41 +143,67 @@ router.get('/curso/:cursoId', requireAuth, async (req, res) => {
 });
 
 // POST /api/examenes/:examenId/enviar - Enviar examen
+const reiniciarCurso = async (usuarioId, cursoId) => {
+  const inscripcion = await Inscripcion.findOne({ usuario: usuarioId, curso: cursoId });
+  if (!inscripcion) return false;
+
+  inscripcion.progresoLecciones.forEach(leccion => {
+    leccion.videoCompletado = false;
+    leccion.completado = false;
+    leccion.progreso = 0;
+    leccion.fechaCompletado = null;
+  });
+
+  inscripcion.progresoGeneral = 0;
+  inscripcion.estado = 'activo';
+  inscripcion.ultimaLeccionAccedida = null;
+  inscripcion.fechaUltimoAcceso = new Date();
+  await inscripcion.save();
+  return true;
+};
+
 router.post('/:examenId/enviar', requireAuth, async (req, res) => {
   try {
     const { examenId } = req.params;
     const { cursoId, respuestas } = req.body;
     const usuarioId = req.session.usuario.id;
 
-    // Obtener examen con respuestas correctas
     const examen = await Examen.findById(examenId);
     if (!examen) {
       return res.status(404).json({ error: 'Examen no encontrado' });
     }
 
-    // Verificar intentos
+    const diplomaExistente = await Diploma.findOne({
+      usuario: usuarioId,
+      curso: cursoId
+    }).select('_id');
+
+    if (diplomaExistente) {
+      return res.status(403).json({
+        success: false,
+        error: 'Ya finalizaste este curso. Tu diploma está disponible para descarga.'
+      });
+    }
+
     const intentosPrevios = await RespuestaExamen.countDocuments({
       usuario: usuarioId,
       examen: examenId
     });
 
     if (intentosPrevios >= examen.intentosPermitidos) {
-      return res.status(400).json({ 
-        error: `Has alcanzado el límite de intentos (${examen.intentosPermitidos})` 
+      return res.status(400).json({
+        error: `Has alcanzado el límite de intentos (${examen.intentosPermitidos})`
       });
     }
 
-    // Calcular resultados
     const preguntasOrdenadas = [...examen.preguntas].sort((a, b) => a.orden - b.orden);
     const respuestasConResultado = respuestas.map(resp => {
       const pregunta = preguntasOrdenadas.find(p => p._id.toString() === resp.preguntaId);
-      
       if (!pregunta) return resp;
 
       let esCorrecta = false;
-
       if (pregunta.tipo === 'opcion_multiple') {
-        const opcionIndex = parseInt(resp.respuesta);
+        const opcionIndex = parseInt(resp.respuesta, 10);
         esCorrecta = pregunta.opciones[opcionIndex]?.esCorrecta || false;
       } else if (pregunta.tipo === 'verdadero_falso') {
         const respuestaCorrecta = pregunta.opciones.find(o => o.esCorrecta);
@@ -99,9 +211,6 @@ router.post('/:examenId/enviar', requireAuth, async (req, res) => {
           const valorCorrecto = respuestaCorrecta.texto.toLowerCase().includes('verdadero') ? 'true' : 'false';
           esCorrecta = resp.respuesta === valorCorrecto;
         }
-      } else {
-        // Para texto, se puede evaluar manualmente después
-        esCorrecta = false; // Por defecto, requiere revisión manual
       }
 
       return {
@@ -111,7 +220,6 @@ router.post('/:examenId/enviar', requireAuth, async (req, res) => {
       };
     });
 
-    // Crear respuesta de examen
     const respuestaExamen = new RespuestaExamen({
       usuario: usuarioId,
       examen: examenId,
@@ -122,7 +230,6 @@ router.post('/:examenId/enviar', requireAuth, async (req, res) => {
       fechaFinalizacion: new Date()
     });
 
-    // Calcular resultado
     const resultado = respuestaExamen.calcularResultado();
     respuestaExamen.puntajeTotal = resultado.puntosTotal;
     respuestaExamen.puntajeMaximo = resultado.puntosMaximo;
@@ -130,6 +237,157 @@ router.post('/:examenId/enviar', requireAuth, async (req, res) => {
     respuestaExamen.aprobado = resultado.porcentaje >= examen.porcentajeAprobacion;
 
     await respuestaExamen.save();
+
+    let intentosRestantes = Math.max(examen.intentosPermitidos - respuestaExamen.intento, 0);
+    let cursoReiniciado = false;
+
+    if (!respuestaExamen.aprobado && intentosRestantes === 0) {
+      cursoReiniciado = await reiniciarCurso(usuarioId, cursoId);
+      intentosRestantes = examen.intentosPermitidos;
+      await RespuestaExamen.deleteMany({ usuario: usuarioId, curso: cursoId });
+    }
+
+    let diplomaInfo = null;
+
+    if (respuestaExamen.aprobado && examen.tipo === 'final') {
+      try {
+        const [usuarioDoc, cursoDoc] = await Promise.all([
+          Usuario.findById(usuarioId),
+          Curso.findById(cursoId)
+        ]);
+
+        if (usuarioDoc && cursoDoc) {
+          await Inscripcion.findOneAndUpdate(
+            { usuario: usuarioId, curso: cursoId },
+            {
+              $set: {
+                estado: 'completado',
+                progresoGeneral: 100,
+                fechaUltimoAcceso: new Date()
+              }
+            }
+          );
+
+          const progresoCurso = usuarioDoc.progresoCursos?.find(
+            p => p.curso && p.curso.toString() === cursoId.toString()
+          );
+          if (progresoCurso) {
+            progresoCurso.progreso = 100;
+            progresoCurso.actualizadoEn = new Date();
+          } else {
+            usuarioDoc.progresoCursos.push({
+              curso: cursoId,
+              progreso: 100,
+              actualizadoEn: new Date()
+            });
+          }
+          await usuarioDoc.save();
+
+          if (req.session.usuario) {
+            if (!Array.isArray(req.session.usuario.progresoCursos)) {
+              req.session.usuario.progresoCursos = [];
+            }
+            const progresoSesion = req.session.usuario.progresoCursos.find(
+              p => p.curso === cursoId.toString()
+            );
+            if (progresoSesion) {
+              progresoSesion.progreso = 100;
+              progresoSesion.actualizadoEn = new Date();
+            } else {
+              req.session.usuario.progresoCursos.push({
+                curso: cursoId.toString(),
+                progreso: 100,
+                actualizadoEn: new Date()
+              });
+            }
+          }
+
+          const diplomaArchivo = await generarDiploma({
+            usuario: usuarioDoc,
+            curso: cursoDoc,
+            porcentaje: respuestaExamen.porcentaje,
+            fecha: new Date()
+          });
+
+          const diplomaDoc = await Diploma.findOneAndUpdate(
+            { usuario: usuarioId, curso: cursoId },
+            {
+              usuario: usuarioId,
+              curso: cursoId,
+              examen: examenId,
+              archivoNombre: diplomaArchivo.archivoNombre,
+              archivoRuta: diplomaArchivo.rutaRelativa,
+              archivoPublico: diplomaArchivo.archivoPublico,
+              porcentaje: respuestaExamen.porcentaje,
+              fechaEmision: new Date(),
+              metadata: {
+                puntajeTotal: respuestaExamen.puntajeTotal,
+                puntajeMaximo: respuestaExamen.puntajeMaximo
+              }
+            },
+            { upsert: true, new: true, setDefaultsOnInsert: true }
+          );
+
+          const mensajeNotificacion = `¡Felicitaciones! Has aprobado el curso "${cursoDoc.titulo}". Tu diploma ya está disponible para descarga.`;
+          const notificacion = await Notificacion.create({
+            usuario: usuarioId,
+            titulo: 'Diploma disponible',
+            mensaje: mensajeNotificacion,
+            tipo: 'diploma',
+            link: diplomaDoc.archivoPublico
+          });
+
+          await Usuario.findByIdAndUpdate(usuarioId, {
+            $push: {
+              notificacionesNoLeidas: {
+                notificacion: notificacion._id,
+                titulo: notificacion.titulo,
+                mensaje: notificacion.mensaje,
+                tipo: notificacion.tipo,
+                link: notificacion.link,
+                fecha: notificacion.fechaCreacion
+              }
+            }
+          });
+
+          if (req.session.usuario) {
+            const notif = {
+              notificacion: notificacion._id.toString(),
+              titulo: notificacion.titulo,
+              mensaje: notificacion.mensaje,
+              tipo: notificacion.tipo,
+              link: notificacion.link,
+              fecha: notificacion.fechaCreacion
+            };
+            req.session.usuario.notificacionesNoLeidas = [
+              ...(req.session.usuario.notificacionesNoLeidas || []),
+              notif
+            ];
+          }
+
+          const io = req.app.get('io');
+          if (io) {
+            io.emit('notificacion_diploma', {
+              usuarioId,
+              cursoId,
+              curso: cursoDoc.titulo,
+              link: diplomaDoc.archivoPublico,
+              mensaje: mensajeNotificacion
+            });
+          }
+
+          diplomaInfo = {
+            id: diplomaDoc._id,
+            url: diplomaDoc.archivoPublico,
+            downloadUrl: `/api/diplomas/${diplomaDoc._id}/descargar`,
+            nombreArchivo: diplomaDoc.archivoNombre,
+            fechaEmision: diplomaDoc.fechaEmision
+          };
+        }
+      } catch (error) {
+        console.error('Error al generar diploma:', error);
+      }
+    }
 
     res.json({
       success: true,
@@ -139,7 +397,10 @@ router.post('/:examenId/enviar', requireAuth, async (req, res) => {
       puntajeMaximo: respuestaExamen.puntajeMaximo,
       porcentajeAprobacion: examen.porcentajeAprobacion,
       intento: respuestaExamen.intento,
-      intentosPermitidos: examen.intentosPermitidos
+      intentosPermitidos: examen.intentosPermitidos,
+      intentosRestantes,
+      reiniciado: cursoReiniciado,
+      diploma: diplomaInfo
     });
   } catch (error) {
     console.error('Error al enviar examen:', error);

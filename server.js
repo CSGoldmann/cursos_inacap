@@ -19,6 +19,8 @@ const authRoutes = require('./routes/auth');
 const inscripcionesRoutes = require('./routes/inscripciones');
 const notificacionesRoutes = require('./routes/notificaciones');
 const mediaRoutes = require('./routes/media');
+const diplomasRoutes = require('./routes/diplomas');
+const usuariosRoutes = require('./routes/usuarios');
 
 const app = express();
 
@@ -59,6 +61,8 @@ app.use('/api/inscripciones', inscripcionesRoutes);
 app.use('/api/notificaciones', notificacionesRoutes);
 app.use('/api/media', mediaRoutes);
 app.use('/api/examenes', require('./routes/examenes'));
+app.use('/api/diplomas', diplomasRoutes);
+app.use('/api/usuarios', usuariosRoutes);
 
 // 🟢 Servir archivos estáticos (HTML, CSS, JS) - DESPUÉS de las rutas API
 app.use(express.static(path.join(__dirname)));
@@ -82,6 +86,8 @@ const io = new Server(server, {
     methods: ["GET", "POST"]
   }
 });
+
+app.set('io', io);
 
 // 💬 Eventos en tiempo real
 io.on('connection', async (socket) => {

@@ -218,32 +218,6 @@ window.toggleNotificaciones = async function () {
       });
     }
 
-    // -- Imagen de perfil --
-    const profilePicInput = document.getElementById("profile-pic-input");
-    const profilePicPreview = document.getElementById("profile-pic-preview");
-    const removePhotoBtn = document.getElementById("remove-photo");
-    const editPictureBtn = document.getElementById("edit-picture");
-
-    if (profilePicInput && profilePicPreview) {
-      if (editPictureBtn) {
-        editPictureBtn.addEventListener("click", () => profilePicInput.click());
-      }
-      profilePicInput.addEventListener("change", (e) => {
-        const file = e.target.files && e.target.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (ev) => (profilePicPreview.src = ev.target.result);
-        reader.readAsDataURL(file);
-      });
-    }
-
-    if (removePhotoBtn && profilePicPreview) {
-      removePhotoBtn.addEventListener("click", () => {
-        profilePicPreview.src = "Pictures/inacap.png";
-        if (profilePicInput) profilePicInput.value = "";
-      });
-    }
-
     // -- Notificaciones clicadas --
     const notifList = document.getElementById("notif-list");
     const notifCountEl = document.getElementById("notif-count");

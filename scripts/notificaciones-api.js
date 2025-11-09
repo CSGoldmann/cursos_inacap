@@ -8,6 +8,34 @@ if (typeof window.API_BASE_URL === 'undefined') {
 // Usar directamente window.API_BASE_URL o crear alias local sin const
 var API_BASE_URL = window.API_BASE_URL;
 
+function obtenerBadgeNotificaciones() {
+  return document.getElementById("notif-count");
+}
+
+function obtenerContadorActual() {
+  const badge = obtenerBadgeNotificaciones();
+  if (!badge) return 0;
+  const valor = parseInt((badge.textContent || '').trim(), 10);
+  return Number.isNaN(valor) ? 0 : valor;
+}
+
+function actualizarBadgeNotificaciones(total) {
+  const badge = obtenerBadgeNotificaciones();
+  if (!badge) return;
+
+  if (typeof total !== 'number' || Number.isNaN(total)) {
+    total = obtenerContadorActual();
+  }
+
+  if (total <= 0) {
+    badge.textContent = '';
+    badge.classList.add('d-none');
+  } else {
+    badge.textContent = String(total);
+    badge.classList.remove('d-none');
+  }
+}
+
 // Obtener notificaciones
 async function obtenerNotificaciones(leidas = null) {
   try {
@@ -43,10 +71,15 @@ async function marcarComoLeida(notificacionId) {
       credentials: 'include'
     });
 
-    return response.ok;
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || 'No se pudo marcar la notificación como leída');
+    }
+
+    return await response.json();
   } catch (error) {
     console.error('Error al marcar como leída:', error);
-    return false;
+    return { success: false, error: error.message };
   }
 }
 
@@ -94,7 +127,7 @@ async function cargarNotificaciones() {
   const origen = pendientes.length > 0 ? pendientes : data.notificaciones;
 
   if (!origen || origen.length === 0) {
-    list.innerHTML = '<div class="px-3 py-3 text-center text-secondary small">No hay notificaciones</div>';
+    list.innerHTML = '<li class="px-3 py-3 text-center text-secondary small">No hay notificaciones</li>';
     countEl.classList.add("d-none");
     return;
   }
@@ -128,11 +161,31 @@ async function cargarNotificaciones() {
     const boton = li.querySelector('[data-action="marcar"]');
     if (boton) {
       boton.addEventListener('click', async (event) => {
+        event.preventDefault();
         event.stopPropagation();
-        const ok = await marcarComoLeida(id);
-        if (ok) {
+
+        if (boton.disabled) return;
+        boton.disabled = true;
+
+        const resultado = await marcarComoLeida(id);
+
+        if (resultado?.success) {
           li.remove();
-          await cargarNotificaciones();
+
+          const restantes = typeof resultado.pendientesRestantes === 'number'
+            ? resultado.pendientesRestantes
+            : Math.max(0, obtenerContadorActual() - 1);
+
+          if (!list.querySelector('.notification-item')) {
+            list.innerHTML = '<li class="px-3 py-3 text-center text-secondary small">No hay notificaciones</li>';
+          }
+
+          actualizarBadgeNotificaciones(restantes);
+        } else {
+          boton.disabled = false;
+          const mensaje = resultado?.error || 'No se pudo marcar la notificación como leída.';
+          console.warn(mensaje);
+          alert(mensaje);
         }
       });
     }
@@ -141,12 +194,7 @@ async function cargarNotificaciones() {
   });
 
   const totalPendientes = pendientes.length > 0 ? pendientes.length : data.noLeidas;
-  countEl.textContent = totalPendientes;
-  if (totalPendientes > 0) {
-    countEl.classList.remove("d-none");
-  } else {
-    countEl.classList.add("d-none");
-  }
+  actualizarBadgeNotificaciones(totalPendientes);
 }
 
 // Marcar todas como leídas (botón)

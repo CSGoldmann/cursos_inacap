@@ -2,6 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const Usuario = require('../models/Usuario');
+const Notificacion = require('../models/Notificacion');
 
 // POST /api/auth/login - Iniciar sesión
 router.post('/login', async (req, res) => {
@@ -132,6 +133,25 @@ router.post('/register', async (req, res) => {
 
     await nuevoUsuario.save();
 
+    const notificacionBienvenida = await Notificacion.create({
+      usuario: nuevoUsuario._id,
+      titulo: 'Bienvenido a la plataforma',
+      mensaje: `Hola ${nuevoUsuario.nombre}, ¡gracias por registrarte! Explora los cursos y comienza tu primera ruta de aprendizaje.`,
+      tipo: 'sistema',
+      link: '/index.html'
+    });
+
+    nuevoUsuario.notificacionesNoLeidas.push({
+      notificacion: notificacionBienvenida._id,
+      titulo: notificacionBienvenida.titulo,
+      mensaje: notificacionBienvenida.mensaje,
+      tipo: notificacionBienvenida.tipo,
+      link: notificacionBienvenida.link,
+      fecha: notificacionBienvenida.fechaCreacion
+    });
+
+    await nuevoUsuario.save();
+
     // Guardar sesión automáticamente después del registro
     req.session.usuario = {
       id: nuevoUsuario._id,
@@ -143,7 +163,14 @@ router.post('/register', async (req, res) => {
       rol: nuevoUsuario.rol,
       cursosInscritos: [],
       progresoCursos: [],
-      notificacionesNoLeidas: []
+      notificacionesNoLeidas: [{
+        notificacion: notificacionBienvenida._id.toString(),
+        titulo: notificacionBienvenida.titulo,
+        mensaje: notificacionBienvenida.mensaje,
+        tipo: notificacionBienvenida.tipo,
+        link: notificacionBienvenida.link,
+        fecha: notificacionBienvenida.fechaCreacion
+      }]
     };
 
     res.status(201).json({
@@ -158,7 +185,14 @@ router.post('/register', async (req, res) => {
         rol: nuevoUsuario.rol,
         cursosInscritos: [],
         progresoCursos: [],
-        notificacionesNoLeidas: []
+        notificacionesNoLeidas: [{
+          notificacion: notificacionBienvenida._id.toString(),
+          titulo: notificacionBienvenida.titulo,
+          mensaje: notificacionBienvenida.mensaje,
+          tipo: notificacionBienvenida.tipo,
+          link: notificacionBienvenida.link,
+          fecha: notificacionBienvenida.fechaCreacion
+        }]
       }
     });
   } catch (error) {

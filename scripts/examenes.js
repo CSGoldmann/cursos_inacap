@@ -27,15 +27,35 @@ async function obtenerExamen(cursoId, seccionId, esFinal = false) {
 
     if (response.ok) {
       const data = await response.json();
-      return data.examen || data;
-    } else if (response.status === 404) {
-      console.log('No se encontró examen para esta sección');
-      return null;
+      return { examen: data.examen || data };
     }
-    return null;
+
+    let data = null;
+    let mensaje = null;
+    try {
+      data = await response.json();
+      mensaje = data.error;
+    } catch (error) {
+      data = null;
+      mensaje = null;
+    }
+
+    if (response.status === 404) {
+      return { examen: null, error: mensaje || 'No se encontró examen para esta sección.' };
+    }
+
+    if (response.status === 403) {
+      return {
+        examen: null,
+        error: mensaje || 'Completa los módulos requeridos antes de rendir el examen.',
+        diploma: data?.diploma || null
+      };
+    }
+
+    return { examen: null, error: mensaje || 'No fue posible obtener el examen.' };
   } catch (error) {
     console.error('Error al obtener examen:', error);
-    return null;
+    return { examen: null, error: 'Error de conexión al obtener el examen.' };
   }
 }
 

@@ -6,6 +6,8 @@ const Inscripcion = require('../models/Inscripcion');
 const Curso = require('../models/Curso');
 const Notificacion = require('../models/Notificacion');
 const Usuario = require('../models/Usuario');
+const Examen = require('../models/Examen');
+const RespuestaExamen = require('../models/RespuestaExamen');
 
 // Middleware para verificar autenticación
 const requireAuth = (req, res, next) => {
@@ -231,6 +233,58 @@ router.put('/:cursoId/progreso/:leccionId', requireAuth, async (req, res) => {
       return res.status(404).json({ error: 'No estás inscrito en este curso' });
     }
 
+    const curso = await Curso.findById(req.params.cursoId).lean();
+    if (!curso) {
+      return res.status(404).json({ error: 'Curso no encontrado' });
+    }
+
+    const seccionesOrdenadas = Array.isArray(curso.secciones)
+      ? [...curso.secciones].sort((a, b) => (a.orden || 0) - (b.orden || 0))
+      : [];
+
+    let indiceSeccionActual = -1;
+    let seccionActual = null;
+
+    for (let i = 0; i < seccionesOrdenadas.length; i += 1) {
+      const seccion = seccionesOrdenadas[i];
+      if (!seccion?.lecciones) continue;
+      const encontrada = seccion.lecciones.find(lec => lec?._id && lec._id.toString() === leccionId);
+      if (encontrada) {
+        indiceSeccionActual = i;
+        seccionActual = seccion;
+        break;
+      }
+    }
+
+    if (indiceSeccionActual === -1 || !seccionActual) {
+      return res.status(404).json({ error: 'La lección no pertenece a este curso' });
+    }
+
+    if (indiceSeccionActual > 0) {
+      const seccionAnterior = seccionesOrdenadas[indiceSeccionActual - 1];
+      if (seccionAnterior?.tieneExamen) {
+        const examenSeccionAnterior = await Examen.findOne({
+          curso: req.params.cursoId,
+          seccion: seccionAnterior._id,
+          activo: true
+        }).select('_id');
+
+        if (examenSeccionAnterior) {
+          const examenAprobado = await RespuestaExamen.exists({
+            usuario: req.session.usuario.id,
+            examen: examenSeccionAnterior._id,
+            aprobado: true
+          });
+
+          if (!examenAprobado) {
+            return res.status(403).json({
+              error: 'Debes aprobar el control de la sección anterior antes de continuar con este módulo.'
+            });
+          }
+        }
+      }
+    }
+
     const leccionProgreso = inscripcion.progresoLecciones.find(
       p => p.leccionId.toString() === leccionId
     );
@@ -307,7 +361,7 @@ router.put('/:cursoId/progreso/:leccionId', requireAuth, async (req, res) => {
       }
     }
 
-    const inscripcionActualizada = await Inscripcion.findById(inscripcion._id);
+    const inscripcionActualizada = await Inscripcion.findById(inscripcion._id).populate('curso');
 
     res.json({
       success: true,

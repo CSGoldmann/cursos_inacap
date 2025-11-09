@@ -57,10 +57,11 @@ router.put('/:id/leer', requireAuth, async (req, res) => {
     notificacion.fechaLeida = new Date();
     await notificacion.save();
 
-    await Usuario.findByIdAndUpdate(
+    const usuarioActualizado = await Usuario.findByIdAndUpdate(
       req.session.usuario.id,
-      { $pull: { notificacionesNoLeidas: { notificacion: notificacion._id } } }
-    );
+      { $pull: { notificacionesNoLeidas: { notificacion: notificacion._id } } },
+      { new: true }
+    ).select('notificacionesNoLeidas');
 
     if (req.session.usuario) {
       req.session.usuario.notificacionesNoLeidas = (req.session.usuario.notificacionesNoLeidas || []).filter(
@@ -68,7 +69,13 @@ router.put('/:id/leer', requireAuth, async (req, res) => {
       );
     }
 
-    res.json({ success: true, notificacion });
+    const pendientesRestantes = usuarioActualizado?.notificacionesNoLeidas?.length || 0;
+
+    res.json({
+      success: true,
+      notificacion,
+      pendientesRestantes
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

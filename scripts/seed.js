@@ -663,7 +663,7 @@ async function seedDatabase() {
             descripcion: `Examen de la sección "${seccion.titulo}" del curso "${curso.titulo}"`,
             tipo: 'seccion',
             tiempoLimite: 30, // 30 minutos
-            intentosPermitidos: 3,
+            intentosPermitidos: 2,
             porcentajeAprobacion: 70,
             preguntas: generarPreguntasSeccion(curso, seccion, indiceSeccion)
           });
