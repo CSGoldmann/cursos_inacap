@@ -73,7 +73,7 @@
                 const notifBell = document.getElementById('notif-bell');
 
                 if (notifList) {
-                  notifList.innerHTML = '<div class="px-3 py-3 text-center text-secondary small">No hay notificaciones</div>';
+                  notifList.innerHTML = '<li class="px-3 py-3 text-center text-secondary small">No hay notificaciones pendientes</li>';
                 }
 
                 if (notifCount) {

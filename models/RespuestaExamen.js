@@ -17,6 +17,10 @@ const RespuestaPreguntaSchema = new mongoose.Schema({
   puntosObtenidos: {
     type: Number,
     default: 0
+  },
+  puntosPosibles: {
+    type: Number,
+    default: 0
   }
 });
 
@@ -28,7 +32,6 @@ const RespuestaExamenSchema = new mongoose.Schema({
   },
   examen: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Examen',
     required: true
   },
   curso: {
@@ -71,24 +74,25 @@ const RespuestaExamenSchema = new mongoose.Schema({
 });
 
 RespuestaExamenSchema.methods.calcularResultado = function() {
-  let correctas = 0;
   let puntosTotal = 0;
   let puntosMaximo = 0;
 
   this.respuestas.forEach(respuesta => {
-    puntosMaximo += respuesta.puntosObtenidos || 0;
-    if (respuesta.esCorrecta) {
-      correctas++;
-      puntosTotal += respuesta.puntosObtenidos || 1;
-    }
+    const puntosDisponibles = Number(respuesta.puntosPosibles) || 0;
+    const puntosRespuesta = Number(respuesta.puntosObtenidos) || 0;
+    puntosMaximo += puntosDisponibles;
+    puntosTotal += puntosRespuesta;
   });
 
   this.puntajeTotal = puntosTotal;
   this.puntajeMaximo = puntosMaximo;
   this.porcentaje = puntosMaximo > 0 ? Math.round((puntosTotal / puntosMaximo) * 100) : 0;
-  
-  // Determinar si aprobó (se actualizará con el porcentaje de aprobación del examen)
-  return { correctas, puntosTotal, puntosMaximo, porcentaje: this.porcentaje };
+
+  return {
+    puntosTotal,
+    puntosMaximo,
+    porcentaje: this.porcentaje
+  };
 };
 
 module.exports = mongoose.model('RespuestaExamen', RespuestaExamenSchema);

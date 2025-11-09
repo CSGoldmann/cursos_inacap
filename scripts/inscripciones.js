@@ -110,11 +110,68 @@ async function actualizarProgreso(cursoId, leccionId, datos = {}) {
   }
 }
 
+// Reiniciar progreso de un curso
+async function reiniciarCurso(cursoId) {
+  try {
+    const response = await fetch(`${API_BASE_URL}/inscripciones/${cursoId}/reiniciar`, {
+      method: 'PUT',
+      credentials: 'include'
+    });
+
+    const data = await response.json();
+
+    if (response.ok && data.success) {
+      window.dispatchEvent(new CustomEvent('inscripcion:cambio', {
+        detail: {
+          tipo: 'reinicio',
+          cursoId,
+          inscripcion: data.inscripcion
+        }
+      }));
+      return { success: true, inscripcion: data.inscripcion, message: data.message };
+    }
+
+    return { success: false, error: data.error || 'No se pudo reiniciar el curso.' };
+  } catch (error) {
+    console.error('Error al reiniciar curso:', error);
+    return { success: false, error: 'Error de conexión al reiniciar el curso.' };
+  }
+}
+
+// Cancelar inscripción de un curso
+async function desinscribirseDeCurso(cursoId) {
+  try {
+    const response = await fetch(`${API_BASE_URL}/inscripciones/${cursoId}`, {
+      method: 'DELETE',
+      credentials: 'include'
+    });
+
+    const data = await response.json();
+
+    if (response.ok && data.success) {
+      window.dispatchEvent(new CustomEvent('inscripcion:cambio', {
+        detail: {
+          tipo: 'desinscripcion',
+          cursoId
+        }
+      }));
+      return { success: true, message: data.message };
+    }
+
+    return { success: false, error: data.error || 'No se pudo cancelar la inscripción.' };
+  } catch (error) {
+    console.error('Error al cancelar la inscripción:', error);
+    return { success: false, error: 'Error de conexión al cancelar la inscripción.' };
+  }
+}
+
 // Exportar funciones
 window.inscripcionesAPI = {
   inscribirse: inscribirseACurso,
   estaInscrito,
   obtenerInscripciones,
-  actualizarProgreso
+  actualizarProgreso,
+  reiniciarCurso,
+  desinscribirse: desinscribirseDeCurso
 };
 

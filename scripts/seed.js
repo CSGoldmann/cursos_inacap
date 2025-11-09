@@ -8,7 +8,6 @@ const Curso = require('../models/Curso');
 const Usuario = require('../models/Usuario');
 const Inscripcion = require('../models/Inscripcion');
 const Notificacion = require('../models/Notificacion');
-const Examen = require('../models/Examen');
 const connectDB = require('../config/database');
 
 async function seedDatabase() {
@@ -20,7 +19,6 @@ async function seedDatabase() {
 
     // Limpiar datos existentes
     console.log('🗑️  Limpiando datos existentes...');
-    await Examen.deleteMany({});
     await Inscripcion.deleteMany({});
     await Notificacion.deleteMany({});
     await Curso.deleteMany({});
@@ -646,51 +644,54 @@ async function seedDatabase() {
     console.log(`\n✅ Cursos creados: ${totalCursos}\n`);
 
     // Crear exámenes para las secciones
-    console.log('📝 Creando exámenes...\n');
+    console.log('📝 Configurando exámenes embebidos...\n');
     const cursosCreados = await Curso.find();
     let totalExamenes = 0;
 
     for (const curso of cursosCreados) {
       const secciones = curso.secciones || [];
-      
+      const examenes = [];
+
       for (let indiceSeccion = 0; indiceSeccion < secciones.length; indiceSeccion++) {
         const seccion = secciones[indiceSeccion];
         if (seccion.tieneExamen) {
-          const examen = await Examen.create({
-            curso: curso._id,
+          examenes.push({
             seccion: seccion._id,
             titulo: `Examen: ${seccion.titulo}`,
             descripcion: `Examen de la sección "${seccion.titulo}" del curso "${curso.titulo}"`,
             tipo: 'seccion',
-            tiempoLimite: 30, // 30 minutos
+            tiempoLimite: 30,
             intentosPermitidos: 2,
             porcentajeAprobacion: 70,
-            preguntas: generarPreguntasSeccion(curso, seccion, indiceSeccion)
+            preguntas: generarPreguntasSeccion(curso, seccion, indiceSeccion),
+            activo: true
           });
           totalExamenes++;
-          console.log(`✅ Examen creado: ${examen.titulo}`);
+          console.log(`✅ Examen configurado: ${seccion.titulo} (${curso.titulo})`);
         }
       }
 
-      // Crear examen final para el curso
       if (secciones.length > 0) {
-        const examenFinal = await Examen.create({
-          curso: curso._id,
+        examenes.push({
           seccion: null,
           titulo: `Examen Final: ${curso.titulo}`,
           descripcion: `Examen final del curso "${curso.titulo}"`,
           tipo: 'final',
-          tiempoLimite: 60, // 60 minutos
+          tiempoLimite: 60,
           intentosPermitidos: 2,
           porcentajeAprobacion: 75,
-          preguntas: generarPreguntasFinal(curso)
+          preguntas: generarPreguntasFinal(curso),
+          activo: true
         });
         totalExamenes++;
-        console.log(`✅ Examen final creado: ${examenFinal.titulo}`);
+        console.log(`✅ Examen final configurado: ${curso.titulo}`);
       }
+
+      curso.examenes = examenes;
+      await curso.save();
     }
 
-    console.log(`\n✅ Total de exámenes creados: ${totalExamenes}\n`);
+    console.log(`\n✅ Total de exámenes configurados: ${totalExamenes}\n`);
 
     // Crear usuarios de prueba
     console.log('👥 Creando usuarios de prueba...\n');

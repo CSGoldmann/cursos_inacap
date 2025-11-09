@@ -1,7 +1,7 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs-extra');
-const Diploma = require('../models/Diploma');
+const Usuario = require('../models/Usuario');
 
 const router = express.Router();
 
@@ -15,8 +15,10 @@ const requireAuth = (req, res, next) => {
 const formatearDiploma = (diploma) => {
   if (!diploma) return null;
   const plain = diploma.toObject ? diploma.toObject() : diploma;
+  const cursoValor = plain.curso && plain.curso._id ? plain.curso._id : plain.curso;
   return {
     ...plain,
+    cursoId: cursoValor ? cursoValor.toString() : null,
     url: plain.archivoPublico,
     downloadUrl: `/api/diplomas/${plain._id}/descargar`
   };
@@ -24,13 +26,21 @@ const formatearDiploma = (diploma) => {
 
 router.get('/', requireAuth, async (req, res) => {
   try {
-    const diplomas = await Diploma.find({ usuario: req.session.usuario.id })
-      .populate('curso', 'titulo')
-      .sort({ fechaEmision: -1 });
+    const usuario = await Usuario.findById(req.session.usuario.id)
+      .populate('diplomas.curso', 'titulo')
+      .select('diplomas');
+
+    if (!usuario) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
+    const diplomasOrdenados = [...(usuario.diplomas || [])].sort(
+      (a, b) => new Date(b.fechaEmision || 0) - new Date(a.fechaEmision || 0)
+    );
 
     res.json({
       success: true,
-      diplomas: diplomas.map(formatearDiploma)
+      diplomas: diplomasOrdenados.map(formatearDiploma)
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -39,10 +49,18 @@ router.get('/', requireAuth, async (req, res) => {
 
 router.get('/curso/:cursoId', requireAuth, async (req, res) => {
   try {
-    const diploma = await Diploma.findOne({
-      usuario: req.session.usuario.id,
-      curso: req.params.cursoId
-    }).populate('curso', 'titulo');
+    const usuario = await Usuario.findById(req.session.usuario.id)
+      .populate('diplomas.curso', 'titulo')
+      .select('diplomas');
+
+    if (!usuario) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
+    const diploma = (usuario.diplomas || []).find(d => {
+      const cursoValor = d.curso && d.curso._id ? d.curso._id : d.curso;
+      return cursoValor && cursoValor.toString() === req.params.cursoId;
+    });
 
     if (!diploma) {
       return res.status(404).json({ error: 'Diploma no encontrado' });
@@ -59,10 +77,13 @@ router.get('/curso/:cursoId', requireAuth, async (req, res) => {
 
 router.get('/:id/descargar', requireAuth, async (req, res) => {
   try {
-    const diploma = await Diploma.findOne({
-      _id: req.params.id,
-      usuario: req.session.usuario.id
-    });
+    const usuario = await Usuario.findById(req.session.usuario.id).select('diplomas');
+
+    if (!usuario) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
+    const diploma = usuario.diplomas.id(req.params.id);
 
     if (!diploma) {
       return res.status(404).json({ error: 'Diploma no encontrado' });
