@@ -118,16 +118,21 @@ async function cargarNotificaciones() {
   const data = await obtenerNotificaciones();
   const list = document.getElementById("notif-list");
   const countEl = document.getElementById("notif-count");
-  
+
   if (!list || !countEl) return;
 
   list.innerHTML = "";
 
   const pendientes = Array.isArray(data.pendientes) ? data.pendientes : [];
-  const origen = pendientes.length > 0 ? pendientes : data.notificaciones;
+  const origen = pendientes.map((n) => ({
+    ...n,
+    _id: n.notificacion || n._id,
+    fechaCreacion: n.fecha || n.fechaCreacion,
+    leida: false
+  }));
 
   if (!origen || origen.length === 0) {
-    list.innerHTML = '<li class="px-3 py-3 text-center text-secondary small">No hay notificaciones</li>';
+    list.innerHTML = '<li class="px-3 py-3 text-center text-secondary small">No hay notificaciones pendientes</li>';
     countEl.classList.add("d-none");
     return;
   }
@@ -137,11 +142,13 @@ async function cargarNotificaciones() {
     li.className = `notification-item px-3 py-2 border-bottom small ${n.leida ? '' : 'fw-bold'}`;
     const id = n.notificacion || n._id;
     const fecha = new Date(n.fecha || n.fechaCreacion || Date.now()).toLocaleString('es-ES');
+    const titulo = n.titulo || n.asunto || 'Notificación';
+    const mensaje = n.mensaje || n.descripcion || '';
     li.innerHTML = `
       <div class="d-flex justify-content-between align-items-start gap-3">
         <div>
-          <b>${n.titulo || 'Notificación'}</b><br>
-          <span class="text-muted">${n.mensaje || ''}</span><br>
+          <b>${titulo}</b><br>
+          <span class="text-muted">${mensaje}</span><br>
           <small class="text-muted">${fecha}</small>
         </div>
         <button type="button" class="btn btn-sm btn-link text-decoration-none p-0" data-action="marcar" data-id="${id}">
@@ -177,7 +184,7 @@ async function cargarNotificaciones() {
             : Math.max(0, obtenerContadorActual() - 1);
 
           if (!list.querySelector('.notification-item')) {
-            list.innerHTML = '<li class="px-3 py-3 text-center text-secondary small">No hay notificaciones</li>';
+            list.innerHTML = '<li class="px-3 py-3 text-center text-secondary small">No hay notificaciones pendientes</li>';
           }
 
           actualizarBadgeNotificaciones(restantes);
@@ -185,7 +192,7 @@ async function cargarNotificaciones() {
           boton.disabled = false;
           const mensaje = resultado?.error || 'No se pudo marcar la notificación como leída.';
           console.warn(mensaje);
-          alert(mensaje);
+          toast?.warning?.(mensaje) ?? alert(mensaje);
         }
       });
     }
@@ -193,7 +200,7 @@ async function cargarNotificaciones() {
     list.appendChild(li);
   });
 
-  const totalPendientes = pendientes.length > 0 ? pendientes.length : data.noLeidas;
+  const totalPendientes = pendientes.length > 0 ? pendientes.length : (data.noLeidas || 0);
   actualizarBadgeNotificaciones(totalPendientes);
 }
 

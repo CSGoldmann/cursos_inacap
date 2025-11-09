@@ -6,7 +6,6 @@ const Inscripcion = require('../models/Inscripcion');
 const Curso = require('../models/Curso');
 const Notificacion = require('../models/Notificacion');
 const Usuario = require('../models/Usuario');
-const Examen = require('../models/Examen');
 const RespuestaExamen = require('../models/RespuestaExamen');
 
 // Middleware para verificar autenticación
@@ -68,6 +67,118 @@ router.get('/:cursoId', requireAuth, async (req, res) => {
     }
 
     res.json({ inscrito: true, inscripcion });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// PUT /api/inscripciones/:cursoId/reiniciar - Reiniciar progreso del curso
+router.put('/:cursoId/reiniciar', requireAuth, async (req, res) => {
+  try {
+    const { cursoId } = req.params;
+    const usuarioId = req.session.usuario.id;
+
+    const [curso, inscripcion] = await Promise.all([
+      Curso.findById(cursoId),
+      Inscripcion.findOne({ curso: cursoId, usuario: usuarioId })
+    ]);
+
+    if (!curso) {
+      return res.status(404).json({ error: 'Curso no encontrado' });
+    }
+
+    if (!inscripcion) {
+      return res.status(404).json({ error: 'No estás inscrito en este curso' });
+    }
+
+    const progresoPorLeccion = [];
+    if (Array.isArray(curso.secciones)) {
+      curso.secciones.forEach((seccion) => {
+        if (Array.isArray(seccion.lecciones)) {
+          seccion.lecciones.forEach((leccion) => {
+            const leccionId = leccion?._id || new mongoose.Types.ObjectId();
+            progresoPorLeccion.push({
+              leccionId,
+              videoCompletado: false,
+              completado: false,
+              progreso: 0,
+              fechaCompletado: null
+            });
+          });
+        }
+      });
+    }
+
+    if (progresoPorLeccion.length > 0) {
+      inscripcion.progresoLecciones = progresoPorLeccion;
+    } else {
+      inscripcion.progresoLecciones = [];
+    }
+
+    inscripcion.progresoGeneral = 0;
+    inscripcion.estado = 'activo';
+    inscripcion.ultimaLeccionAccedida = null;
+    inscripcion.fechaUltimoAcceso = new Date();
+    inscripcion.calcularProgreso();
+    await inscripcion.save();
+
+    // Reiniciar contadores del usuario
+    const usuario = await Usuario.findById(usuarioId);
+    if (usuario) {
+      usuario.progresoCursos = (usuario.progresoCursos || []).filter((p) => {
+        if (!p.curso) return false;
+        if (p.curso.toString() === cursoId.toString()) {
+          p.progreso = 0;
+          p.actualizadoEn = new Date();
+        }
+        return true;
+      });
+
+      const progresoExistente = usuario.progresoCursos.find(
+        (p) => p.curso && p.curso.toString() === cursoId.toString()
+      );
+
+      if (!progresoExistente) {
+        usuario.progresoCursos.push({
+          curso: cursoId,
+          progreso: 0,
+          actualizadoEn: new Date()
+        });
+      }
+
+      await usuario.save();
+    }
+
+    if (req.session.usuario) {
+      if (!Array.isArray(req.session.usuario.progresoCursos)) {
+        req.session.usuario.progresoCursos = [];
+      }
+
+      const progresoSesion = req.session.usuario.progresoCursos.find(
+        (p) => p.curso === cursoId.toString()
+      );
+
+      if (progresoSesion) {
+        progresoSesion.progreso = 0;
+        progresoSesion.actualizadoEn = new Date();
+      } else {
+        req.session.usuario.progresoCursos.push({
+          curso: cursoId.toString(),
+          progreso: 0,
+          actualizadoEn: new Date()
+        });
+      }
+    }
+
+    await RespuestaExamen.deleteMany({ usuario: usuarioId, curso: cursoId });
+
+    const inscripcionActualizada = await Inscripcion.findById(inscripcion._id).populate('curso');
+
+    res.json({
+      success: true,
+      message: 'El progreso del curso se reinició correctamente.',
+      inscripcion: inscripcionActualizada
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -218,6 +329,58 @@ router.post('/:cursoId', requireAuth, async (req, res) => {
   }
 });
 
+// DELETE /api/inscripciones/:cursoId - Cancelar inscripción en un curso
+router.delete('/:cursoId', requireAuth, async (req, res) => {
+  try {
+    const { cursoId } = req.params;
+    const usuarioId = req.session.usuario.id;
+
+    const inscripcion = await Inscripcion.findOneAndDelete({
+      usuario: usuarioId,
+      curso: cursoId
+    });
+
+    if (!inscripcion) {
+      return res.status(404).json({ error: 'No estás inscrito en este curso' });
+    }
+
+    await RespuestaExamen.deleteMany({ usuario: usuarioId, curso: cursoId });
+
+    const curso = await Curso.findById(cursoId);
+    if (curso && typeof curso.estudiantesInscritos === 'number' && curso.estudiantesInscritos > 0) {
+      curso.estudiantesInscritos -= 1;
+      await curso.save();
+    }
+
+    const usuario = await Usuario.findById(usuarioId);
+    if (usuario) {
+      usuario.cursosInscritos = (usuario.cursosInscritos || []).filter(
+        (c) => c.toString() !== cursoId.toString()
+      );
+      usuario.progresoCursos = (usuario.progresoCursos || []).filter(
+        (p) => !(p.curso && p.curso.toString() === cursoId.toString())
+      );
+      await usuario.save();
+    }
+
+    if (req.session.usuario) {
+      req.session.usuario.cursosInscritos = (req.session.usuario.cursosInscritos || []).filter(
+        (c) => c !== cursoId.toString()
+      );
+      req.session.usuario.progresoCursos = (req.session.usuario.progresoCursos || []).filter(
+        (p) => p.curso !== cursoId.toString()
+      );
+    }
+
+    res.json({
+      success: true,
+      message: 'Se ha cancelado tu inscripción en el curso.'
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // PUT /api/inscripciones/:cursoId/progreso/:leccionId - Actualizar progreso de lección
 router.put('/:cursoId/progreso/:leccionId', requireAuth, async (req, res) => {
   try {
@@ -263,11 +426,11 @@ router.put('/:cursoId/progreso/:leccionId', requireAuth, async (req, res) => {
     if (indiceSeccionActual > 0) {
       const seccionAnterior = seccionesOrdenadas[indiceSeccionActual - 1];
       if (seccionAnterior?.tieneExamen) {
-        const examenSeccionAnterior = await Examen.findOne({
-          curso: req.params.cursoId,
-          seccion: seccionAnterior._id,
-          activo: true
-        }).select('_id');
+        const examenesCurso = Array.isArray(curso.examenes) ? curso.examenes : [];
+        const examenSeccionAnterior = examenesCurso.find(examen => {
+          if (!examen?.activo || examen.tipo !== 'seccion' || !examen.seccion) return false;
+          return examen.seccion.toString() === seccionAnterior._id.toString();
+        });
 
         if (examenSeccionAnterior) {
           const examenAprobado = await RespuestaExamen.exists({

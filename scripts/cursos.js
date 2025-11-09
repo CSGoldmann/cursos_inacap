@@ -56,6 +56,15 @@ function actualizarInscripcionLocal(inscripcion) {
   }
 }
 
+function removerInscripcionLocal(cursoId) {
+  const id = cursoId ? cursoId.toString() : null;
+  if (!id) return;
+
+  inscripcionesCargadas = (inscripcionesCargadas || []).filter(
+    (inscripcion) => obtenerCursoId(inscripcion.curso) !== id
+  );
+}
+
 async function recargarInscripciones(desdeDetalle = null) {
   if (!window.inscripcionesAPI || typeof window.inscripcionesAPI.obtenerInscripciones !== 'function') {
     return;
@@ -75,15 +84,17 @@ async function recargarInscripciones(desdeDetalle = null) {
 // Renderizar cursos en el dashboard
 function renderizarCursos() {
   let cursosActivosContainer = document.getElementById('cursos-activos-container');
+  let cursosCompletadosContainer = document.getElementById('cursos-completados-container');
   let otrosCursosContainer = document.getElementById('otros-cursos-container');
 
-  if (!cursosActivosContainer || !otrosCursosContainer) {
+  if (!cursosActivosContainer || !cursosCompletadosContainer || !otrosCursosContainer) {
     crearContenedores();
     cursosActivosContainer = document.getElementById('cursos-activos-container');
+    cursosCompletadosContainer = document.getElementById('cursos-completados-container');
     otrosCursosContainer = document.getElementById('otros-cursos-container');
   }
 
-  if (!cursosActivosContainer || !otrosCursosContainer) {
+  if (!cursosActivosContainer || !cursosCompletadosContainer || !otrosCursosContainer) {
     console.warn('No se encontraron contenedores para renderizar cursos.');
     return;
   }
@@ -98,6 +109,15 @@ function renderizarCursos() {
         </div>
       </div>
     `;
+
+    cursosCompletadosContainer.innerHTML = `
+      <div class="col-12">
+        <div class="alert alert-secondary text-center mb-0">
+          Sin cursos finalizados por ahora. Completa un curso para verlo aquí.
+        </div>
+      </div>
+    `;
+
     otrosCursosContainer.innerHTML = `
       <div class="col-12">
         <div class="alert alert-secondary text-center mb-0">
@@ -108,40 +128,58 @@ function renderizarCursos() {
     return;
   }
 
-  const cursosActivos = cursosCargados.filter(c => {
-    if (!inscripcionesCargadas || inscripcionesCargadas.length === 0) return false;
-    const inscripcion = inscripcionesCargadas.find(i => {
-      const cursoId = i.curso._id || i.curso;
-      const cursoActualId = c._id || c.id;
-      return cursoId && cursoActualId && cursoId.toString() === cursoActualId.toString();
-    });
-    return inscripcion && inscripcion.estado === 'activo';
+  const mapaInscripciones = new Map();
+  (inscripcionesCargadas || []).forEach((inscripcion) => {
+    const cursoId = obtenerCursoId(inscripcion?.curso);
+    if (cursoId) {
+      mapaInscripciones.set(cursoId, inscripcion);
+    }
   });
 
-  const cursosOtros = cursosCargados.filter(c => {
-    if (!inscripcionesCargadas || inscripcionesCargadas.length === 0) return true;
-    const inscripcion = inscripcionesCargadas.find(i => {
-      const cursoId = i.curso._id || i.curso;
-      const cursoActualId = c._id || c.id;
-      return cursoId && cursoActualId && cursoId.toString() === cursoActualId.toString();
-    });
-    return !inscripcion || inscripcion.estado !== 'activo';
+  const obtenerInscripcionCurso = (curso) => {
+    const cursoId = obtenerCursoId(curso);
+    if (!cursoId) return null;
+    return mapaInscripciones.get(cursoId) || null;
+  };
+
+  const cursosActivos = [];
+  const cursosCompletados = [];
+  const cursosOtros = [];
+
+  cursosCargados.forEach((curso) => {
+    const inscripcion = obtenerInscripcionCurso(curso);
+
+    if (inscripcion?.estado === 'activo') {
+      cursosActivos.push({ curso, inscripcion });
+      return;
+    }
+
+    if (inscripcion?.estado === 'completado') {
+      cursosCompletados.push({ curso, inscripcion });
+      return;
+    }
+
+    if (!inscripcion || (inscripcion.estado !== 'activo' && inscripcion.estado !== 'completado')) {
+      cursosOtros.push({ curso, inscripcion });
+    }
   });
 
-  // Reemplazar contenido de contenedores
   cursosActivosContainer.innerHTML = cursosActivos.length > 0
-    ? cursosActivos.map(curso => {
-        const inscripcion = inscripcionesCargadas.find(i => {
-          const cursoId = i.curso._id || i.curso;
-          const cursoActualId = curso._id || curso.id;
-          return cursoId && cursoActualId && cursoId.toString() === cursoActualId.toString();
-        });
-        return crearTarjetaCurso(curso, true, inscripcion);
-      }).join('')
+    ? cursosActivos
+        .map(({ curso, inscripcion }) => crearTarjetaCurso(curso, 'activo', inscripcion))
+        .join('')
     : '<div class="col-12"><p class="text-center text-muted">No tienes cursos inscritos aún. ¡Inscríbete a uno de los cursos disponibles!</p></div>';
 
+  cursosCompletadosContainer.innerHTML = cursosCompletados.length > 0
+    ? cursosCompletados
+        .map(({ curso, inscripcion }) => crearTarjetaCurso(curso, 'completado', inscripcion))
+        .join('')
+    : '<div class="col-12"><p class="text-center text-muted">Aún no has completado ningún curso. Termina uno para verlo aquí.</p></div>';
+
   otrosCursosContainer.innerHTML = cursosOtros.length > 0
-    ? cursosOtros.map(curso => crearTarjetaCurso(curso, false)).join('')
+    ? cursosOtros
+        .map(({ curso }) => crearTarjetaCurso(curso, 'explorar'))
+        .join('')
     : '<div class="col-12"><p class="text-center text-muted">No hay más cursos disponibles.</p></div>';
 }
 
@@ -150,25 +188,114 @@ function crearContenedores() {
   const dashboardContent = document.getElementById('dashboard-content');
   if (!dashboardContent) return;
 
-  // Buscar el contenedor de "Mis cursos"
-  const misCursosSection = dashboardContent.querySelector('.row.row-cols-1.row-cols-md-3.g-4');
-  if (misCursosSection) {
-    misCursosSection.id = 'cursos-activos-container';
+  if (!document.getElementById('cursos-activos-container')) {
+    const activos = dashboardContent.querySelector('[data-role="cursos-activos"]');
+    if (activos) activos.id = 'cursos-activos-container';
   }
 
-  // Buscar el contenedor de "Otros Cursos"
-  const otrosCursosSection = document.querySelector('.row.row-cols-1.row-cols-md-3.g-4');
-  if (otrosCursosSection && otrosCursosSection !== misCursosSection) {
-    otrosCursosSection.id = 'otros-cursos-container';
+  if (!document.getElementById('cursos-completados-container')) {
+    const completados = dashboardContent.querySelector('[data-role="cursos-completados"]');
+    if (completados) completados.id = 'cursos-completados-container';
+  }
+
+  if (!document.getElementById('otros-cursos-container')) {
+    const explorar = dashboardContent.querySelector('[data-role="cursos-explorar"]');
+    if (explorar) explorar.id = 'otros-cursos-container';
   }
 }
 
 // Crear tarjeta de curso
-function crearTarjetaCurso(curso, esActivo, inscripcion = null) {
-  const progreso = inscripcion ? inscripcion.progresoGeneral : calcularProgreso(curso);
+function crearTarjetaCurso(curso, estado = 'explorar', inscripcion = null) {
+  const esActivo = estado === 'activo';
+  const esCompletado = estado === 'completado';
+  const progresoCalculado = inscripcion && typeof inscripcion.progresoGeneral === 'number'
+    ? Math.round(inscripcion.progresoGeneral)
+    : calcularProgreso(curso);
+  const progreso = esCompletado ? 100 : Math.min(100, Math.max(0, progresoCalculado));
   const estrellas = generarEstrellas(curso.calificacion || 0);
   const imagenUrl = curso.imagen || 'Pictures/default-course.jpg';
   const cursoId = curso._id || curso.id;
+  const estadoBadge = esCompletado
+    ? '<span class="badge bg-success position-absolute top-0 start-0 m-2">Completado</span>'
+    : esActivo
+      ? '<span class="badge bg-primary position-absolute top-0 start-0 m-2">En curso</span>'
+      : '';
+
+  const dropdownItems = [];
+
+  if (esActivo) {
+    dropdownItems.push(`
+              <li>
+                <button type="button"
+                        class="dropdown-item"
+                        data-action="reiniciar-curso"
+                        data-curso-id="${cursoId}">
+                  <i class="bi bi-arrow-counterclockwise me-2"></i>Reiniciar curso
+                </button>
+              </li>
+            `);
+    dropdownItems.push(`
+              <li>
+                <button type="button"
+                        class="dropdown-item text-danger"
+                        data-action="desinscribir-curso"
+                        data-curso-id="${cursoId}">
+                  <i class="bi bi-box-arrow-left me-2"></i>Salir del curso
+                </button>
+              </li>
+            `);
+    dropdownItems.push('<li><hr class="dropdown-divider"></li>');
+    dropdownItems.push(`
+              <li><a class="dropdown-item" href="#"><i class="bi bi-heart me-2"></i>Agregar a favoritos</a></li>
+            `);
+    dropdownItems.push(`
+              <li><a class="dropdown-item" href="#"><i class="bi bi-archive me-2"></i>Archivar</a></li>
+            `);
+  } else if (esCompletado) {
+    dropdownItems.push('<li><hr class="dropdown-divider"></li>');
+    dropdownItems.push(`
+              <li><a class="dropdown-item" href="curso-vista.html?id=${cursoId}"><i class="bi bi-play-circle me-2"></i>Repasar contenido</a></li>
+            `);
+    dropdownItems.push(`
+              <li><a class="dropdown-item" href="curso.html?id=${cursoId}"><i class="bi bi-journal-text me-2"></i>Ver detalles</a></li>
+            `);
+    dropdownItems.push(`
+              <li><a class="dropdown-item" href="curso-vista.html?id=${cursoId}#diploma-sidebar-container"><i class="bi bi-award me-2"></i>Ver diploma</a></li>
+            `);
+  } else {
+    dropdownItems.push(`
+              <li><a class="dropdown-item" href="curso.html?id=${cursoId}"><i class="bi bi-play-circle me-2"></i>Iniciar curso</a></li>
+            `);
+    dropdownItems.push(`
+              <li><a class="dropdown-item" href="#"><i class="bi bi-heart me-2"></i>Agregar a favoritos</a></li>
+            `);
+    dropdownItems.push(`
+              <li><a class="dropdown-item" href="#"><i class="bi bi-eye-slash me-2"></i>No mostrar</a></li>
+            `);
+  }
+
+  dropdownItems.push('<li><hr class="dropdown-divider"></li>');
+  dropdownItems.push('<li><a class="dropdown-item" href="#"><i class="bi bi-share me-2"></i>Compartir</a></li>');
+
+  const dropdownHtml = dropdownItems.join('');
+
+  const bloqueProgreso = (esActivo || esCompletado)
+    ? `
+            <div class="progress" style="height:6px;">
+              <div class="progress-bar" role="progressbar" style="width:${progreso}%"
+                  aria-valuenow="${progreso}" aria-valuemin="0" aria-valuemax="100"></div>
+            </div>
+            <div class="d-flex justify-content-between align-items-center mt-2 small text-secondary">
+              <div class="text-warning">${estrellas}</div>
+              <div>${esCompletado ? 'Finalizado' : `${progreso}% completado`}</div>
+            </div>
+          `
+    : `
+            <div class="d-flex justify-content-between align-items-center mt-2 small text-secondary">
+              <div class="text-warning">${estrellas}</div>
+              <div>${curso.nivel || 'Intermedio'}</div>
+            </div>
+          `;
 
   return `
     <div class="col">
@@ -177,20 +304,12 @@ function crearTarjetaCurso(curso, esActivo, inscripcion = null) {
           <a href="curso.html?id=${cursoId}">
             <img src="${imagenUrl}" class="card-img-top" alt="${curso.titulo}" onerror="this.src='Pictures/default-course.jpg'">
           </a>
+          ${estadoBadge}
           <div class="dropdown position-absolute top-0 end-0 m-2">
             <button class="btn btn-light rounded-0 border dropdown-toggle p-1" type="button" 
                     data-bs-toggle="dropdown" aria-expanded="false" aria-label="menu"></button>
             <ul class="dropdown-menu dropdown-menu-end">
-              ${esActivo ? `
-                <li><a class="dropdown-item" href="#"><img src="Pictures/restart.png" style="width: 16px; height: 16px; margin-right: 8px;">Reiniciar Curso</a></li>
-                <li><a class="dropdown-item" href="#"><img src="Pictures/heart.png" style="width: 16px; height: 16px; margin-right: 8px;">Favorito</a></li>
-                <li><a class="dropdown-item" href="#"><img src="Pictures/save-file.png" style="width: 16px; height: 16px; margin-right: 8px;">Archivar</a></li>
-              ` : `
-                <li><a class="dropdown-item" href="curso.html?id=${cursoId}"><img src="Pictures/play.png" style="width: 16px; height: 16px; margin-right: 8px;">Iniciar Curso</a></li>
-                <li><a class="dropdown-item" href="#"><img src="Pictures/heart.png" style="width: 16px; height: 16px; margin-right: 8px;">Favorito</a></li>
-                <li><a class="dropdown-item" href="#"><img src="Pictures/blind.png" style="width: 16px; height: 16px; margin-right: 8px;">No Mostrar Más</a></li>
-              `}
-              <li><a class="dropdown-item" href="#"><img src="Pictures/share.png" style="width: 16px; height: 16px; margin-right: 8px;">Compartir</a></li>
+              ${dropdownHtml}
             </ul>
           </div>
         </div>
@@ -199,20 +318,7 @@ function crearTarjetaCurso(curso, esActivo, inscripcion = null) {
             <a href="curso.html?id=${cursoId}" class="text-decoration-none text-dark">${curso.titulo}</a>
           </h6>
           <p class="text-muted small mb-2">Profesor: ${curso.profesor?.nombre || 'Sin especificar'}</p>
-          ${esActivo ? `
-            <div class="progress" style="height:6px;">
-              <div class="progress-bar" role="progressbar" style="width:${progreso}%" aria-valuenow="${progreso}" aria-valuemin="0" aria-valuemax="100"></div>
-            </div>
-            <div class="d-flex justify-content-between align-items-center mt-2 small text-secondary">
-              <div class="text-warning">${estrellas}</div>
-              <div>${progreso}% complete</div>
-            </div>
-          ` : `
-            <div class="d-flex justify-content-between align-items-center mt-2 small text-secondary">
-              <div class="text-warning">${estrellas}</div>
-              <div>${curso.nivel || 'Intermedio'}</div>
-            </div>
-          `}
+          ${bloqueProgreso}
         </div>
         <div class="card-footer bg-transparent border-0 pb-3 pt-0">
           <div class="dropdown">
@@ -337,4 +443,75 @@ window.addEventListener('inscripcion:cambio', async (event) => {
     await recargarInscripciones(detalle);
   }
 });
+
+async function manejarAccionTarjeta(event) {
+  const boton = event.target.closest('[data-action="reiniciar-curso"], [data-action="desinscribir-curso"]');
+  if (!boton) return;
+
+  const accion = boton.dataset.action;
+  const cursoId = boton.dataset.cursoId;
+  if (!accion || !cursoId) return;
+
+  event.preventDefault();
+  event.stopPropagation();
+
+  try {
+    const dropdownToggle = boton.closest('.dropdown')?.querySelector('[data-bs-toggle="dropdown"]');
+    if (dropdownToggle && window.bootstrap?.Dropdown) {
+      const dropdown = window.bootstrap.Dropdown.getInstance(dropdownToggle) || new window.bootstrap.Dropdown(dropdownToggle);
+      dropdown.hide();
+    }
+  } catch (error) {
+    console.debug('No se pudo cerrar el menú desplegable:', error);
+  }
+
+  if (accion === 'reiniciar-curso') {
+    const confirmar = window.confirm('¿Quieres reiniciar tu progreso en este curso? Esta acción restablecerá todas las lecciones.');
+    if (!confirmar) return;
+
+    boton.classList.add('disabled');
+
+    try {
+      const resultado = await window.inscripcionesAPI?.reiniciarCurso?.(cursoId);
+      if (resultado?.success && resultado.inscripcion) {
+        actualizarInscripcionLocal(resultado.inscripcion);
+        renderizarCursos();
+        toast?.success?.(resultado.message || 'Tu progreso fue reiniciado.');
+      } else {
+        toast?.error?.(resultado?.error || 'No se pudo reiniciar el curso.');
+      }
+    } catch (error) {
+      console.error('Error al reiniciar curso:', error);
+      toast?.error?.('Ocurrió un error al reiniciar el curso.');
+    } finally {
+      boton.classList.remove('disabled');
+    }
+    return;
+  }
+
+  if (accion === 'desinscribir-curso') {
+    const confirmar = window.confirm('¿Deseas salir de este curso? Se eliminará tu progreso y dejarás de verlo en tu listado.');
+    if (!confirmar) return;
+
+    boton.classList.add('disabled');
+
+    try {
+      const resultado = await window.inscripcionesAPI?.desinscribirse?.(cursoId);
+      if (resultado?.success) {
+        removerInscripcionLocal(cursoId);
+        renderizarCursos();
+        toast?.info?.(resultado.message || 'Se canceló la inscripción del curso.');
+      } else {
+        toast?.error?.(resultado?.error || 'No se pudo cancelar la inscripción.');
+      }
+    } catch (error) {
+      console.error('Error al cancelar inscripción:', error);
+      toast?.error?.('Ocurrió un error al cancelar la inscripción.');
+    } finally {
+      boton.classList.remove('disabled');
+    }
+  }
+}
+
+document.addEventListener('click', manejarAccionTarjeta);
 

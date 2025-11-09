@@ -1,21 +1,13 @@
-const mongoose = require('mongoose');
+const { Schema } = require('mongoose');
 
-const DiplomaSchema = new mongoose.Schema({
-  usuario: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Usuario',
-    required: true,
-    index: true
-  },
+const DiplomaSchema = new Schema({
   curso: {
-    type: mongoose.Schema.Types.ObjectId,
+    type: Schema.Types.ObjectId,
     ref: 'Curso',
-    required: true,
-    index: true
+    required: true
   },
-  examen: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Examen'
+  examenId: {
+    type: Schema.Types.ObjectId
   },
   archivoNombre: String,
   archivoRuta: String,
@@ -26,14 +18,14 @@ const DiplomaSchema = new mongoose.Schema({
     default: Date.now
   },
   metadata: {
-    type: Object,
+    type: Schema.Types.Mixed,
     default: {}
-  }
+  },
+  numeroCertificado: String
 }, {
+  _id: true,
   timestamps: true
 });
 
-DiplomaSchema.index({ usuario: 1, curso: 1 }, { unique: true });
-
-module.exports = mongoose.model('Diploma', DiplomaSchema);
+module.exports = DiplomaSchema;
 

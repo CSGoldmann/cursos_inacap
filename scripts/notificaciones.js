@@ -17,8 +17,8 @@ function cargarNotificaciones() {
   if (!notifList) return;
 
   notifList.innerHTML = notificaciones.length
-    ? notificaciones.map(n => `<div class="px-3 py-2 border-bottom small">${n.mensaje}<br><span class="text-muted">${n.fecha}</span></div>`).join("")
-    : '<div class="px-3 py-3 text-center text-secondary small">No hay notificaciones</div>';
+    ? notificaciones.map(n => `<li class="px-3 py-2 border-bottom small">${n.mensaje}<br><span class="text-muted">${n.fecha}</span></li>`).join("")
+    : '<li class="px-3 py-3 text-center text-secondary small">No hay notificaciones pendientes</li>';
 
   if (notifCount) {
     notifCount.textContent = notificaciones.length || '';

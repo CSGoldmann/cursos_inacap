@@ -1,5 +1,6 @@
 // models/Curso.js
 const mongoose = require('mongoose');
+const { ExamenSchema } = require('./Examen');
 
 const LeccionSchema = new mongoose.Schema({
   titulo: {
@@ -113,6 +114,10 @@ const CursoSchema = new mongoose.Schema({
   fechaActualizacion: {
     type: Date,
     default: Date.now
+  },
+  examenes: {
+    type: [ExamenSchema],
+    default: []
   }
 });
 

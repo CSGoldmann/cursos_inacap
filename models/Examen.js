@@ -1,7 +1,8 @@
 // models/Examen.js
-const mongoose = require('mongoose');
+// Define esquemas reutilizables para los exámenes embebidos en los cursos.
+const { Schema } = require('mongoose');
 
-const OpcionSchema = new mongoose.Schema({
+const OpcionSchema = new Schema({
   texto: {
     type: String,
     required: true
@@ -10,9 +11,9 @@ const OpcionSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   }
-});
+}, { _id: true });
 
-const PreguntaSchema = new mongoose.Schema({
+const PreguntaSchema = new Schema({
   pregunta: {
     type: String,
     required: true
@@ -22,26 +23,25 @@ const PreguntaSchema = new mongoose.Schema({
     enum: ['opcion_multiple', 'verdadero_falso', 'texto'],
     default: 'opcion_multiple'
   },
-  opciones: [OpcionSchema],
+  opciones: {
+    type: [OpcionSchema],
+    default: []
+  },
   puntos: {
     type: Number,
-    default: 1
+    default: 1,
+    min: 0
   },
   orden: {
     type: Number,
     required: true
   }
-});
+}, { _id: true });
 
-const ExamenSchema = new mongoose.Schema({
-  curso: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Curso',
-    required: true
-  },
+const ExamenSchema = new Schema({
   seccion: {
-    type: mongoose.Schema.Types.ObjectId,
-    required: false // null para examen final
+    type: Schema.Types.ObjectId,
+    required: false
   },
   titulo: {
     type: String,
@@ -54,20 +54,24 @@ const ExamenSchema = new mongoose.Schema({
     default: 'seccion'
   },
   tiempoLimite: {
-    type: Number, // en minutos, 0 = sin límite
+    type: Number,
     default: 0
   },
   intentosPermitidos: {
     type: Number,
-    default: 2
+    default: 2,
+    min: 1
   },
   porcentajeAprobacion: {
     type: Number,
-    default: 70, // 70% para aprobar
+    default: 70,
     min: 0,
     max: 100
   },
-  preguntas: [PreguntaSchema],
+  preguntas: {
+    type: [PreguntaSchema],
+    default: []
+  },
   activo: {
     type: Boolean,
     default: true
@@ -76,7 +80,11 @@ const ExamenSchema = new mongoose.Schema({
     type: Date,
     default: Date.now
   }
-});
+}, { _id: true });
 
-module.exports = mongoose.model('Examen', ExamenSchema);
+module.exports = {
+  OpcionSchema,
+  PreguntaSchema,
+  ExamenSchema
+};
 

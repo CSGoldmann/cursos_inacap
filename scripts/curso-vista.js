@@ -785,17 +785,21 @@ function mostrarExamen(examen) {
     let opcionesHTML = '';
 
     if (pregunta.tipo === 'opcion_multiple' && pregunta.opciones) {
-      opcionesHTML = pregunta.opciones.map((opcion, opcIdx) => `
+      opcionesHTML = pregunta.opciones.map((opcion, opcIdx) => {
+        const valorOpcion = opcion._id || opcion.opcionId || opcIdx;
+        return `
         <div class="form-check">
           <input class="form-check-input" type="radio" 
                  name="pregunta_${pregunta._id}" 
                  id="opcion_${pregunta._id}_${opcIdx}" 
-                 value="${opcIdx}">
+                 value="${valorOpcion}"
+                 data-opcion-id="${valorOpcion}">
           <label class="form-check-label" for="opcion_${pregunta._id}_${opcIdx}">
             ${opcion.texto}
           </label>
         </div>
-      `).join('');
+      `;
+      }).join('');
     } else if (pregunta.tipo === 'verdadero_falso') {
       opcionesHTML = `
         <div class="form-check">
@@ -842,24 +846,19 @@ async function enviarExamen(examen) {
                             document.querySelector(`[name="pregunta_${pregunta._id}"]`);
       
       if (respuestaInput) {
-        let respuesta = respuestaInput.value || respuestaInput.textContent;
-        let esCorrecta = false;
+        const respuestaValor = respuestaInput.value ?? respuestaInput.textContent ?? '';
+        const payload = {
+          preguntaId: pregunta._id,
+          respuesta: respuestaValor
+        };
 
-        // Verificar si es correcta
         if (pregunta.tipo === 'opcion_multiple') {
-          const opcionIndex = parseInt(respuesta);
-          esCorrecta = pregunta.opciones[opcionIndex]?.esCorrecta || false;
-        } else if (pregunta.tipo === 'verdadero_falso') {
-          const respuestaCorrecta = pregunta.opciones.find(o => o.esCorrecta);
-          esCorrecta = respuesta === (respuestaCorrecta?.texto === 'Verdadero' ? 'true' : 'false');
+          payload.opcionId = respuestaValor;
+        } else if (pregunta.tipo === 'texto') {
+          payload.respuesta = (respuestaInput.value || '').trim();
         }
 
-        respuestas.push({
-          preguntaId: pregunta._id,
-          respuesta: respuesta,
-          esCorrecta: esCorrecta,
-          puntosObtenidos: esCorrecta ? pregunta.puntos : 0
-        });
+        respuestas.push(payload);
       }
     });
 

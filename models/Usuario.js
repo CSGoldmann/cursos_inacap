@@ -1,6 +1,7 @@
 // models/Usuario.js
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
+const DiplomaSchema = require('./Diploma');
 
 const UsuarioSchema = new mongoose.Schema({
   email: {
@@ -74,6 +75,10 @@ const UsuarioSchema = new mongoose.Schema({
         default: Date.now
       }
     }],
+    default: []
+  },
+  diplomas: {
+    type: [DiplomaSchema],
     default: []
   },
   activo: {

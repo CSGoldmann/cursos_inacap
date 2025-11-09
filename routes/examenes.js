@@ -1,12 +1,22 @@
 // routes/examenes.js
 const express = require('express');
+const mongoose = require('mongoose');
+
 const router = express.Router();
-const Examen = require('../models/Examen');
+
+function mezclarOpciones(opciones = []) {
+  const barajadas = Array.from(opciones);
+  for (let i = barajadas.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [barajadas[i], barajadas[j]] = [barajadas[j], barajadas[i]];
+  }
+  return barajadas;
+}
+
 const RespuestaExamen = require('../models/RespuestaExamen');
 const Curso = require('../models/Curso');
 const Inscripcion = require('../models/Inscripcion');
 const Usuario = require('../models/Usuario');
-const Diploma = require('../models/Diploma');
 const Notificacion = require('../models/Notificacion');
 const generarDiploma = require('../utils/diplomaGenerator');
 
@@ -22,54 +32,58 @@ const requireAuth = (req, res, next) => {
 router.get('/curso/:cursoId', requireAuth, async (req, res) => {
   try {
     const { cursoId } = req.params;
+    const cursoIdStr = cursoId.toString();
     const { seccion, tipo } = req.query;
 
-    let query = { curso: cursoId, activo: true };
+    const [curso, inscripcion, usuarioDoc] = await Promise.all([
+      Curso.findById(cursoId),
+      Inscripcion.findOne({
+        usuario: req.session.usuario.id,
+        curso: cursoId
+      }),
+      Usuario.findById(req.session.usuario.id).select('diplomas')
+    ]);
 
-    if (tipo === 'final') {
-      query.tipo = 'final';
-    } else if (seccion) {
-      query.seccion = seccion;
-      query.tipo = 'seccion';
-    } else {
-      // Por defecto, buscar examen de sección
-      query.tipo = 'seccion';
+    if (!curso) {
+      return res.status(404).json({ error: 'Curso no encontrado' });
     }
-
-    const examen = await Examen.findOne(query);
-
-    if (!examen) {
-      return res.status(404).json({ error: 'Examen no encontrado' });
-    }
-
-    const inscripcion = await Inscripcion.findOne({
-      usuario: req.session.usuario.id,
-      curso: cursoId
-    });
 
     if (!inscripcion) {
       return res.status(403).json({ error: 'Debes estar inscrito en el curso para rendir el examen.' });
     }
 
-  const diploma = await Diploma.findOne({
-    usuario: req.session.usuario.id,
-    curso: cursoId
-  }).select('_id archivoPublico');
+    const examenesCurso = Array.isArray(curso.examenes) ? curso.examenes : [];
+    const seccionId = seccion ? seccion.toString() : null;
 
-  if (inscripcion.estado === 'completado' || diploma) {
-    return res.status(403).json({
-      error: 'Ya finalizaste este curso. Descarga tu diploma en la sección de certificados.',
-      diploma: diploma ? {
-        id: diploma._id,
-        url: diploma.archivoPublico,
-        downloadUrl: `/api/diplomas/${diploma._id}/descargar`
-      } : null
-    });
-  }
+    let examen = null;
+    if (tipo === 'final') {
+      examen = examenesCurso.find(ex => ex.activo && ex.tipo === 'final');
+    } else if (seccionId) {
+      examen = examenesCurso.find(ex =>
+        ex.activo &&
+        ex.tipo === 'seccion' &&
+        ex.seccion &&
+        ex.seccion.toString() === seccionId
+      );
+    } else {
+      examen = examenesCurso.find(ex => ex.activo && ex.tipo === 'seccion');
+    }
 
-    const curso = await Curso.findById(cursoId);
-    if (!curso) {
-      return res.status(404).json({ error: 'Curso no encontrado' });
+    if (!examen) {
+      return res.status(404).json({ error: 'Examen no encontrado' });
+    }
+
+    const diplomaExistente = usuarioDoc?.diplomas?.find(d => d.curso && d.curso.toString() === cursoIdStr);
+
+    if (inscripcion.estado === 'completado' || diplomaExistente) {
+      return res.status(403).json({
+        error: 'Ya finalizaste este curso. Descarga tu diploma en la sección de certificados.',
+        diploma: diplomaExistente ? {
+          id: diplomaExistente._id,
+          url: diplomaExistente.archivoPublico,
+          downloadUrl: `/api/diplomas/${diplomaExistente._id}/descargar`
+        } : null
+      });
     }
 
     const leccionesCompletadas = new Set(
@@ -124,17 +138,25 @@ router.get('/curso/:cursoId', requireAuth, async (req, res) => {
     }
 
     // No enviar respuestas correctas al cliente
-    const examenParaCliente = examen.toObject();
+    const examenParaCliente = examen.toObject ? examen.toObject() : {
+      ...examen,
+      _id: examen._id
+    };
     examenParaCliente.preguntas = examenParaCliente.preguntas.map(p => {
       const pregunta = { ...p };
-      if (p.opciones) {
-        pregunta.opciones = p.opciones.map(o => ({
-          texto: o.texto,
-          esCorrecta: false // No enviar la respuesta correcta
+      if (Array.isArray(p.opciones) && p.opciones.length > 0) {
+        const opcionesBarajadas = mezclarOpciones(p.opciones);
+        pregunta.opciones = opcionesBarajadas.map(o => ({
+          _id: o._id,
+          opcionId: o._id,
+          texto: o.esCorrecta ? `${o.texto} (correcta)` : o.texto,
+          esCorrecta: false
         }));
       }
       return pregunta;
     });
+
+    examenParaCliente.curso = curso._id;
 
     res.json({ examen: examenParaCliente });
   } catch (error) {
@@ -168,15 +190,31 @@ router.post('/:examenId/enviar', requireAuth, async (req, res) => {
     const { cursoId, respuestas } = req.body;
     const usuarioId = req.session.usuario.id;
 
-    const examen = await Examen.findById(examenId);
+    if (!cursoId) {
+      return res.status(400).json({ error: 'Curso no especificado.' });
+    }
+
+    const usuarioDoc = await Usuario.findById(usuarioId);
+    if (!usuarioDoc) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
+    const curso = await Curso.findById(cursoId);
+    if (!curso) {
+      return res.status(404).json({ error: 'Curso no encontrado' });
+    }
+
+    const cursoIdStr = cursoId.toString();
+
+    const examenesCurso = Array.isArray(curso.examenes) ? curso.examenes : [];
+    const examen = examenesCurso.find(ex => ex._id.toString() === examenId);
     if (!examen) {
       return res.status(404).json({ error: 'Examen no encontrado' });
     }
 
-    const diplomaExistente = await Diploma.findOne({
-      usuario: usuarioId,
-      curso: cursoId
-    }).select('_id');
+    const diplomaExistente = usuarioDoc.diplomas?.find(
+      diploma => diploma.curso && diploma.curso.toString() === cursoIdStr
+    );
 
     if (diplomaExistente) {
       return res.status(403).json({
@@ -202,28 +240,44 @@ router.post('/:examenId/enviar', requireAuth, async (req, res) => {
       if (!pregunta) return resp;
 
       let esCorrecta = false;
+      const puntosPregunta = Number(pregunta.puntos) || 0;
+
       if (pregunta.tipo === 'opcion_multiple') {
-        const opcionIndex = parseInt(resp.respuesta, 10);
-        esCorrecta = pregunta.opciones[opcionIndex]?.esCorrecta || false;
+        const valorRespuesta = resp.opcionId || resp.respuesta;
+        let opcionSeleccionada = null;
+
+        if (valorRespuesta && mongoose.Types.ObjectId.isValid(valorRespuesta)) {
+          opcionSeleccionada = pregunta.opciones.find(o => o._id.toString() === valorRespuesta.toString());
+        }
+
+        if (!opcionSeleccionada) {
+          const opcionIndex = parseInt(valorRespuesta, 10);
+          if (!Number.isNaN(opcionIndex)) {
+            opcionSeleccionada = pregunta.opciones[opcionIndex];
+          }
+        }
+
+        esCorrecta = opcionSeleccionada?.esCorrecta || false;
       } else if (pregunta.tipo === 'verdadero_falso') {
         const respuestaCorrecta = pregunta.opciones.find(o => o.esCorrecta);
         if (respuestaCorrecta) {
           const valorCorrecto = respuestaCorrecta.texto.toLowerCase().includes('verdadero') ? 'true' : 'false';
-          esCorrecta = resp.respuesta === valorCorrecto;
+          esCorrecta = (resp.respuesta || '').toString() === valorCorrecto;
         }
       }
 
       return {
         ...resp,
         esCorrecta,
-        puntosObtenidos: esCorrecta ? pregunta.puntos : 0
+        puntosObtenidos: esCorrecta ? puntosPregunta : 0,
+        puntosPosibles: puntosPregunta
       };
     });
 
     const respuestaExamen = new RespuestaExamen({
       usuario: usuarioId,
       examen: examenId,
-      curso: cursoId,
+      curso: curso._id,
       respuestas: respuestasConResultado,
       intento: intentosPrevios + 1,
       fechaInicio: new Date(),
@@ -231,9 +285,6 @@ router.post('/:examenId/enviar', requireAuth, async (req, res) => {
     });
 
     const resultado = respuestaExamen.calcularResultado();
-    respuestaExamen.puntajeTotal = resultado.puntosTotal;
-    respuestaExamen.puntajeMaximo = resultado.puntosMaximo;
-    respuestaExamen.porcentaje = resultado.porcentaje;
     respuestaExamen.aprobado = resultado.porcentaje >= examen.porcentajeAprobacion;
 
     await respuestaExamen.save();
@@ -251,10 +302,7 @@ router.post('/:examenId/enviar', requireAuth, async (req, res) => {
 
     if (respuestaExamen.aprobado && examen.tipo === 'final') {
       try {
-        const [usuarioDoc, cursoDoc] = await Promise.all([
-          Usuario.findById(usuarioId),
-          Curso.findById(cursoId)
-        ]);
+        const cursoDoc = curso;
 
         if (usuarioDoc && cursoDoc) {
           await Inscripcion.findOneAndUpdate(
@@ -309,24 +357,34 @@ router.post('/:examenId/enviar', requireAuth, async (req, res) => {
             fecha: new Date()
           });
 
-          const diplomaDoc = await Diploma.findOneAndUpdate(
-            { usuario: usuarioId, curso: cursoId },
-            {
-              usuario: usuarioId,
-              curso: cursoId,
-              examen: examenId,
-              archivoNombre: diplomaArchivo.archivoNombre,
-              archivoRuta: diplomaArchivo.rutaRelativa,
-              archivoPublico: diplomaArchivo.archivoPublico,
-              porcentaje: respuestaExamen.porcentaje,
-              fechaEmision: new Date(),
-              metadata: {
-                puntajeTotal: respuestaExamen.puntajeTotal,
-                puntajeMaximo: respuestaExamen.puntajeMaximo
-              }
-            },
-            { upsert: true, new: true, setDefaultsOnInsert: true }
+          const diplomaPayload = {
+            curso: curso._id,
+            examenId,
+            archivoNombre: diplomaArchivo.archivoNombre,
+            archivoRuta: diplomaArchivo.rutaRelativa,
+            archivoPublico: diplomaArchivo.archivoPublico,
+            porcentaje: respuestaExamen.porcentaje,
+            fechaEmision: new Date(),
+            metadata: {
+              puntajeTotal: respuestaExamen.puntajeTotal,
+              puntajeMaximo: respuestaExamen.puntajeMaximo
+            }
+          };
+
+          let diplomaDoc;
+          const indiceExistente = (usuarioDoc.diplomas || []).findIndex(
+            d => d.curso && d.curso.toString() === cursoIdStr
           );
+
+          if (indiceExistente >= 0) {
+            usuarioDoc.diplomas[indiceExistente].set(diplomaPayload);
+            diplomaDoc = usuarioDoc.diplomas[indiceExistente];
+          } else {
+            usuarioDoc.diplomas.push(diplomaPayload);
+            diplomaDoc = usuarioDoc.diplomas[usuarioDoc.diplomas.length - 1];
+          }
+
+          await usuarioDoc.save();
 
           const mensajeNotificacion = `¡Felicitaciones! Has aprobado el curso "${cursoDoc.titulo}". Tu diploma ya está disponible para descarga.`;
           const notificacion = await Notificacion.create({
@@ -414,10 +472,26 @@ router.get('/curso/:cursoId/resultados', requireAuth, async (req, res) => {
     const { cursoId } = req.params;
     const usuarioId = req.session.usuario.id;
 
-    const resultados = await RespuestaExamen.find({
+    const resultadosDocs = await RespuestaExamen.find({
       usuario: usuarioId,
       curso: cursoId
-    }).populate('examen').sort({ fechaFinalizacion: -1 });
+    }).sort({ fechaFinalizacion: -1 }).lean();
+
+    const curso = await Curso.findById(cursoId).select('examenes').lean();
+    const examenesMap = new Map();
+    if (curso?.examenes) {
+      curso.examenes.forEach(examen => {
+        examenesMap.set(examen._id.toString(), examen);
+      });
+    }
+
+    const resultados = resultadosDocs.map(resultado => {
+      const examenInfo = examenesMap.get(resultado.examen?.toString());
+      return {
+        ...resultado,
+        examen: examenInfo ? { ...examenInfo, curso: cursoId } : null
+      };
+    });
 
     res.json(resultados);
   } catch (error) {

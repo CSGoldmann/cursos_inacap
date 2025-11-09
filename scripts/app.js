@@ -16,16 +16,17 @@ if (typeof io !== 'undefined') {
   });
 
   // Escuchar notificaciones desde el servidor
-  socket.on("notificacion_diploma", (data) => {
+  socket.on("notificacion_diploma", async (data) => {
     console.log("🎓 Notificación diploma:", data);
-    alert("🎓 Diploma emitido: " + data.mensaje);
-    agregarNotificacion("🎓 " + data.mensaje);
+    toast?.success?.(data.mensaje, { title: "Diploma emitido" });
+    await agregarNotificacion("🎓 " + data.mensaje);
   });
 
-  socket.on("notificacion_admin", (data) => {
+  socket.on("notificacion_admin", async (data) => {
     console.log("📚 Notificación admin:", data);
-    alert("📚 Nuevo curso publicado: " + data.titulo);
-    agregarNotificacion("📚 " + data.titulo);
+    const mensaje = data.descripcion || data.titulo || "Nuevo curso disponible";
+    toast?.info?.(mensaje, { title: "Nuevo curso" });
+    await agregarNotificacion("📚 " + mensaje);
   });
 
   // Funciones para emitir eventos hacia el servidor (pueden llamarse desde consola o botones)
@@ -68,7 +69,7 @@ function cargarNotificaciones() {
   list.innerHTML = "";
 
   if (notificaciones.length === 0) {
-    list.innerHTML = '<div class="px-3 py-3 text-center text-secondary small">No hay notificaciones</div>';
+    list.innerHTML = '<li class="px-3 py-3 text-center text-secondary small">No hay notificaciones pendientes</li>';
     countEl.classList.add("d-none");
     return;
   }
@@ -85,7 +86,18 @@ function cargarNotificaciones() {
 }
 
 // Agrega una notificación nueva
-function agregarNotificacion(texto) {
+async function agregarNotificacion(texto) {
+  if (window.notificacionesAPI && window.auth && window.auth.estaAutenticado()) {
+    // Refrescar desde la API para reflejar el estado en notificacionesNoLeidas
+    try {
+      await window.notificacionesAPI.cargarNotificaciones();
+      return;
+    } catch (error) {
+      console.error('Error al recargar notificaciones desde la API:', error);
+      // Continuar con fallback local si la API falla
+    }
+  }
+
   guardarNotificacion(texto);
   cargarNotificaciones();
 }
